@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/context/AuthContext';
 import { getCourses, getCompletedLessonIds } from '../courses/courseService';
+import { getStudySessions } from '../timer/timerService';
 import {
   subscribeToGamification,
   getLocalProfile,
@@ -27,13 +28,19 @@ export function DashboardPage() {
   const [completedLessonCount, setCompletedLessonCount] = useState(1);
   const [liveProfile, setLiveProfile] = useState(() => getLocalProfile());
   const [achievements, setAchievements] = useState(() => getAllAchievementsWithStatus());
+  const [totalStudySeconds, setTotalStudySeconds] = useState(5400);
 
   useEffect(() => {
-    // 1. Fetch current courses & completed lessons
+    // 1. Fetch current courses, completed lessons, and study sessions
     getCourses().then((data) => {
       setCourses(data);
       const set = getCompletedLessonIds();
       setCompletedLessonCount(set.size);
+    });
+
+    getStudySessions().then((sessions) => {
+      const added = (sessions || []).reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
+      setTotalStudySeconds(5400 + added);
     });
 
     // 2. Subscribe to live gamification updates
@@ -44,6 +51,10 @@ export function DashboardPage() {
       setAchievements(getAllAchievementsWithStatus());
       const set = getCompletedLessonIds();
       setCompletedLessonCount(set.size);
+      getStudySessions().then((sessions) => {
+        const added = (sessions || []).reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
+        setTotalStudySeconds(5400 + added);
+      });
     });
 
     return () => unsubscribe();
@@ -54,7 +65,6 @@ export function DashboardPage() {
   const levelData = calculateLevel(xp);
   const level = levelData.level;
   const levelProgress = levelData.progressPercent;
-  const totalStudySeconds = 5400; // 90 min initial
   const studyHours = (totalStudySeconds / 3600).toFixed(1);
 
   return (

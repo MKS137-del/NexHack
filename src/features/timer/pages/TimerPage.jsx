@@ -44,6 +44,7 @@ export function TimerPage() {
   const [startTime, setStartTime] = useState(null);
   const [recentSessions, setRecentSessions] = useState([]);
   const [completedSummary, setCompletedSummary] = useState(null);
+  const [toastMessage, setToastMessage] = useState(null);
 
   // Interval reference
   const timerRef = useRef(null);
@@ -190,7 +191,8 @@ export function TimerPage() {
       setRecentSessions(updated);
       resetTimer();
     } else {
-      alert(result.reason || 'Session was too short to record XP (<60s).');
+      setToastMessage(result.reason || 'Session was too short to record XP (<60s).');
+      setTimeout(() => setToastMessage(null), 5000);
       resetTimer();
     }
   };
@@ -222,6 +224,13 @@ export function TimerPage() {
           Prevent tab-throttling with wall-clock verified intervals and earn authenticated XP rewards
         </p>
       </div>
+
+      {/* Inline Toast Notification */}
+      {toastMessage && (
+        <div className="flex items-center justify-center gap-2 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold animate-slide-up max-w-md mx-auto shadow-md">
+          <span>{toastMessage}</span>
+        </div>
+      )}
 
       {/* Main Focus Control Card */}
       <div className="rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl p-6 sm:p-10 space-y-8 relative overflow-hidden backdrop-blur-sm">

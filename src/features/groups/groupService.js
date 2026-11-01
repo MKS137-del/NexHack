@@ -50,8 +50,16 @@ const safeStorage = {
 export function generateInviteCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
-  for (let i = 0; i < 4; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    const bytes = new Uint8Array(4);
+    crypto.getRandomValues(bytes);
+    for (let i = 0; i < 4; i++) {
+      code += chars[bytes[i] % chars.length];
+    }
+  } else {
+    for (let i = 0; i < 4; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
   }
   return `NEX-${code}`;
 }
@@ -101,10 +109,14 @@ export async function getGroups() {
     }
   }
 
-  return groups.map((g) => ({
-    ...g,
-    is_member: memberships.includes(g.id),
-  }));
+  return groups.map((g) => {
+    const isMember = memberships.includes(g.id);
+    return {
+      ...g,
+      is_member: isMember,
+      invite_code: isMember ? g.invite_code : undefined,
+    };
+  });
 }
 
 /**
@@ -201,17 +213,18 @@ export async function joinGroup(groupId) {
     }
   }
 
-  if (!memberships.includes(groupId)) {
-    memberships.push(groupId);
+  const isAlreadyMember = memberships.includes(groupId);
+  if (!isAlreadyMember) {
+    memberships = [...memberships, groupId];
     safeStorage.setItem(USER_GROUPS_STORAGE_KEY, JSON.stringify(memberships));
-  }
 
-  // Increment group member count
-  const allGroups = await getGroups();
-  const target = allGroups.find((g) => g.id === groupId);
-  if (target) {
-    target.member_count = (target.member_count || 1) + 1;
-    safeStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(allGroups));
+    // Immutable update of member count
+    const raw = safeStorage.getItem(GROUPS_STORAGE_KEY);
+    const allGroups = raw ? JSON.parse(raw) : INITIAL_GROUPS;
+    const updatedGroups = allGroups.map((g) =>
+      g.id === groupId ? { ...g, member_count: (g.member_count || 1) + 1 } : g
+    );
+    safeStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(updatedGroups));
   }
 
   return { success: true };
@@ -226,8 +239,9 @@ export async function joinGroupByCode(inviteCode) {
   }
 
   const cleanCode = inviteCode.trim().toUpperCase();
-  const allGroups = await getGroups();
-  const matched = allGroups.find(
+  const raw = safeStorage.getItem(GROUPS_STORAGE_KEY);
+  const rawGroups = raw ? JSON.parse(raw) : INITIAL_GROUPS;
+  const matched = rawGroups.find(
     (g) => g.invite_code && g.invite_code.toUpperCase() === cleanCode
   );
 
@@ -253,7 +267,18 @@ export async function leaveGroup(groupId) {
     }
   }
 
-  memberships = memberships.filter((id) => id !== groupId);
-  safeStorage.setItem(USER_GROUPS_STORAGE_KEY, JSON.stringify(memberships));
+  if (memberships.includes(groupId)) {
+    memberships = memberships.filter((id) => id !== groupId);
+    safeStorage.setItem(USER_GROUPS_STORAGE_KEY, JSON.stringify(memberships));
+
+    // Immutable decrement of member count
+    const raw = safeStorage.getItem(GROUPS_STORAGE_KEY);
+    const allGroups = raw ? JSON.parse(raw) : INITIAL_GROUPS;
+    const updatedGroups = allGroups.map((g) =>
+      g.id === groupId ? { ...g, member_count: Math.max(1, (g.member_count || 1) - 1) } : g
+    );
+    safeStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(updatedGroups));
+  }
+
   return { success: true };
 }

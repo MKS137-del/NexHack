@@ -321,9 +321,9 @@ export async function evaluateAchievements({ totalXP, streak, profile }) {
     }
   };
 
-  if (totalXP >= 100) checkBadge('century_club');
-  if (streak >= 3) checkBadge('streak_starter');
-  if (streak >= 7) checkBadge('streak_master');
+  if (totalXP >= 500) checkBadge('century_club');
+  if (streak >= 3) checkBadge('streak_3');
+  if (streak >= 7) checkBadge('streak_7');
 
   if (newlyUnlocked.length > 0) {
     safeStorage.setItem('nexhack_user_achievements', JSON.stringify(earnedBadges));

@@ -19,13 +19,17 @@ export async function getInsightsAnalytics() {
   const dayStudyMap = { Mon: 1.2, Tue: 2.1, Wed: 0.9, Thu: 2.5, Fri: 1.8, Sat: 3.2, Sun: 2.5 };
   const dayXpMap = { Mon: 60, Tue: 110, Wed: 50, Thu: 130, Fri: 90, Sat: 160, Sun: 120 };
 
-  // Aggregate today's sessions into the matching day
+  // Aggregate today's sessions strictly matching today's date
   const todayDayIndex = (new Date().getDay() + 6) % 7; // 0 for Mon ... 6 for Sun
   const todayName = daysOfWeek[todayDayIndex];
+  const todayDateStr = new Date().toISOString().split('T')[0];
 
   let addedSecondsToday = 0;
   sessions.forEach((sess) => {
-    addedSecondsToday += sess.duration_seconds || 0;
+    const sessionDateStr = sess.ended_at ? sess.ended_at.split('T')[0] : '';
+    if (sessionDateStr === todayDateStr) {
+      addedSecondsToday += sess.duration_seconds || 0;
+    }
   });
 
   if (addedSecondsToday > 0) {
