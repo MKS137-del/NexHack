@@ -7,6 +7,23 @@
 import { supabase, isSupabaseConfigured } from '../../lib/supabase.js';
 import { INITIAL_ACHIEVEMENTS } from '../../lib/mockData.js';
 
+const safeStorage = {
+  getItem: (key) => {
+    try {
+      return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+    } catch {
+      return null;
+    }
+  },
+  setItem: (key, val) => {
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.setItem(key, val);
+    } catch {
+      // ignore
+    }
+  },
+};
+
 // Event listeners for cross-component reactive updates
 const listeners = new Set();
 
@@ -83,11 +100,13 @@ export function calculateStreak(currentStreak, lastActiveDateStr) {
  * Retrieves the local mock profile state
  */
 export function getLocalProfile() {
-  try {
-    const raw = localStorage.getItem('nexhack_mock_user');
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // fallback
+  const raw = safeStorage.getItem('nexhack_mock_user');
+  if (raw) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      // fallback
+    }
   }
   return {
     id: 'usr-evaluator-001',
@@ -106,22 +125,20 @@ export function getLocalProfile() {
  * Saves updated local profile state
  */
 export function saveLocalProfile(profile) {
-  try {
-    localStorage.setItem('nexhack_mock_user', JSON.stringify(profile));
-  } catch {
-    // localstorage error
-  }
+  safeStorage.setItem('nexhack_mock_user', JSON.stringify(profile));
 }
 
 /**
  * Retrieves XP transactions ledger
  */
 export function getXPTransactions() {
-  try {
-    const raw = localStorage.getItem('nexhack_xp_transactions');
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // fallback
+  const raw = safeStorage.getItem('nexhack_xp_transactions');
+  if (raw) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      // fallback
+    }
   }
   return [
     {
@@ -193,11 +210,7 @@ export async function awardXP({
 
   const existingTxs = getXPTransactions();
   const updatedTxs = [tx, ...existingTxs];
-  try {
-    localStorage.setItem('nexhack_xp_transactions', JSON.stringify(updatedTxs));
-  } catch {
-    // storage error
-  }
+  safeStorage.setItem('nexhack_xp_transactions', JSON.stringify(updatedTxs));
 
   // Check milestone badge achievements
   const unlockedBadges = await evaluateAchievements({
@@ -259,10 +272,14 @@ export async function awardXP({
  */
 export async function evaluateAchievements({ totalXP, streak, profile }) {
   let earnedBadges = [];
-  try {
-    const raw = localStorage.getItem('nexhack_user_achievements');
-    earnedBadges = raw ? JSON.parse(raw) : ['first_step'];
-  } catch {
+  const raw = safeStorage.getItem('nexhack_user_achievements');
+  if (raw) {
+    try {
+      earnedBadges = JSON.parse(raw);
+    } catch {
+      earnedBadges = ['first_step'];
+    }
+  } else {
     earnedBadges = ['first_step'];
   }
 
@@ -280,11 +297,7 @@ export async function evaluateAchievements({ totalXP, streak, profile }) {
   if (streak >= 7) checkBadge('streak_master');
 
   if (newlyUnlocked.length > 0) {
-    try {
-      localStorage.setItem('nexhack_user_achievements', JSON.stringify(earnedBadges));
-    } catch {
-      // storage error
-    }
+    safeStorage.setItem('nexhack_user_achievements', JSON.stringify(earnedBadges));
   }
 
   return newlyUnlocked;
@@ -295,10 +308,14 @@ export async function evaluateAchievements({ totalXP, streak, profile }) {
  */
 export function getAllAchievementsWithStatus() {
   let unlocked = [];
-  try {
-    const raw = localStorage.getItem('nexhack_user_achievements');
-    unlocked = raw ? JSON.parse(raw) : ['first_step'];
-  } catch {
+  const raw = safeStorage.getItem('nexhack_user_achievements');
+  if (raw) {
+    try {
+      unlocked = JSON.parse(raw);
+    } catch {
+      unlocked = ['first_step'];
+    }
+  } else {
     unlocked = ['first_step'];
   }
 
