@@ -178,11 +178,22 @@ export function extractPlaylistId(input) {
   // URL matching
   try {
     const url = new URL(trimmed);
-    const listParam = url.searchParams.get('list');
-    if (listParam) return listParam;
+    const host = url.hostname.toLowerCase();
+    const isYouTubeHost =
+      host === 'youtube.com' ||
+      host.endsWith('.youtube.com') ||
+      host === 'youtu.be' ||
+      host === 'youtube-nocookie.com';
+
+    if (isYouTubeHost) {
+      const listParam = url.searchParams.get('list');
+      if (listParam && /^[A-Za-z0-9_-]{18,44}$/.test(listParam)) {
+        return listParam;
+      }
+    }
   } catch {
     // If not a full URL with protocol, try regex
-    const match = trimmed.match(/[?&]list=([A-Za-z0-9_-]+)/);
+    const match = trimmed.match(/[?&]list=([A-Za-z0-9_-]{18,44})/);
     if (match && match[1]) return match[1];
   }
 

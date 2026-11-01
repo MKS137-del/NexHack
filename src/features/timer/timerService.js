@@ -145,13 +145,27 @@ export async function verifyAndSaveSession({
   clientDurationSeconds,
   isPomodoroComplete = false,
 }) {
+  const nowMs = Date.now();
   const startMs = new Date(startedAt).getTime();
-  const endMs = new Date(endedAt).getTime();
+  const rawEndMs = new Date(endedAt).getTime();
+
+  if (isNaN(startMs) || isNaN(rawEndMs) || startMs > nowMs + 5000) {
+    clearActiveTimerState();
+    return {
+      success: false,
+      reason: 'Invalid session timestamp provided.',
+      verifiedDurationSeconds: 0,
+      xpEarned: 0,
+    };
+  }
+
+  // Cap endedAt to current time (+2s leeway) to prevent fabricating future timestamps
+  const endMs = Math.min(rawEndMs, nowMs + 2000);
   const wallClockSeconds = Math.max(0, Math.floor((endMs - startMs) / 1000));
 
   // Anti-tamper check: Client duration cannot exceed wall-clock duration plus 5s leeway
   const verifiedDurationSeconds = Math.min(
-    Math.max(0, clientDurationSeconds),
+    Math.max(0, Math.floor(Number(clientDurationSeconds) || 0)),
     wallClockSeconds + 5
   );
 

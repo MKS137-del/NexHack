@@ -192,10 +192,22 @@ export async function awardXP({
   description = 'Earned XP',
   userId = null,
 }) {
-  if (!amount || amount <= 0) return null;
+  const numericAmount = Math.max(0, Math.floor(Number(amount) || 0));
+  if (numericAmount <= 0) return null;
+
+  // Strict deduplication check for lesson completion rewards
+  if (source === 'lesson_complete' && referenceId) {
+    const existingLedger = getXPTransactions();
+    const alreadyAwarded = existingLedger.some(
+      (tx) => tx.source === 'lesson_complete' && String(tx.reference_id) === String(referenceId)
+    );
+    if (alreadyAwarded) {
+      return null;
+    }
+  }
 
   const profile = getLocalProfile();
-  const currentXP = (profile.total_xp || 0) + amount;
+  const currentXP = (profile.total_xp || 0) + numericAmount;
   const levelInfo = calculateLevel(currentXP);
 
   const streakCheck = calculateStreak(profile.streak_days || 0, profile.last_active_date);
