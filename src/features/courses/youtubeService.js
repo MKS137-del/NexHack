@@ -218,8 +218,11 @@ export function extractVideoId(input) {
     }
     const vParam = url.searchParams.get('v');
     if (vParam && /^[A-Za-z0-9_-]{11}$/.test(vParam)) return vParam;
+
+    const pathMatch = url.pathname.match(/\/(?:embed|v|shorts)\/([A-Za-z0-9_-]{11})/);
+    if (pathMatch && pathMatch[1]) return pathMatch[1];
   } catch {
-    const match = trimmed.match(/(?:v=|\/embed\/|youtu\.be\/|\/v\/)([A-Za-z0-9_-]{11})/);
+    const match = trimmed.match(/(?:v=|\/embed\/|youtu\.be\/|\/v\/|\/shorts\/)([A-Za-z0-9_-]{11})/);
     if (match && match[1]) return match[1];
   }
 
@@ -227,7 +230,7 @@ export function extractVideoId(input) {
 }
 
 /**
- * Decodes standard HTML entities
+ * Decodes standard named, decimal, and hexadecimal HTML entities
  */
 function decodeHtmlEntities(text) {
   if (!text) return '';
@@ -238,7 +241,8 @@ function decodeHtmlEntities(text) {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec));
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(Number(dec)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 }
 
 /**

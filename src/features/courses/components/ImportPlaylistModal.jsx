@@ -56,6 +56,9 @@ export function ImportPlaylistModal({ isOpen, onClose, onImportSuccess }) {
     try {
       const newCourse = await importPlaylistCourse(url, category, customTitle);
       setLoading(false);
+      setUrl('');
+      setCustomTitle('');
+      setError(null);
       onImportSuccess(newCourse);
       onClose();
     } catch (err) {

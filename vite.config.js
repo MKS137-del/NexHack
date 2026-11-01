@@ -11,13 +11,11 @@ export default defineConfig({
       '/api/youtube-feed': {
         target: 'https://www.youtube.com',
         changeOrigin: true,
-        secure: false,
         rewrite: (path) => path.replace(/^\/api\/youtube-feed/, '/feeds/videos.xml'),
       },
       '/api/youtube-oembed': {
         target: 'https://www.youtube.com',
         changeOrigin: true,
-        secure: false,
         rewrite: (path) => path.replace(/^\/api\/youtube-oembed/, '/oembed'),
       },
     },
@@ -29,13 +27,11 @@ export default defineConfig({
       '/api/youtube-feed': {
         target: 'https://www.youtube.com',
         changeOrigin: true,
-        secure: false,
         rewrite: (path) => path.replace(/^\/api\/youtube-feed/, '/feeds/videos.xml'),
       },
       '/api/youtube-oembed': {
         target: 'https://www.youtube.com',
         changeOrigin: true,
-        secure: false,
         rewrite: (path) => path.replace(/^\/api\/youtube-oembed/, '/oembed'),
       },
     },

@@ -18,8 +18,10 @@ const rawId = 'PLot-Xpze53ldVwtstag2TL4HQhAnC8ksf';
 assert.strictEqual(extractPlaylistId(rawId), 'PLot-Xpze53ldVwtstag2TL4HQhAnC8ksf');
 assert.strictEqual(extractVideoId('https://www.youtube.com/watch?v=w7ejDZ8SWv8'), 'w7ejDZ8SWv8');
 assert.strictEqual(extractVideoId('https://youtu.be/bMknfKXIFA8'), 'bMknfKXIFA8');
+assert.strictEqual(extractVideoId('https://www.youtube.com/embed/LDB4uaJ87e0'), 'LDB4uaJ87e0');
+assert.strictEqual(extractVideoId('https://www.youtube.com/shorts/s9fokUqJ76A'), 's9fokUqJ76A');
 assert.strictEqual(extractVideoId('https://www.youtube.com/playlist?list=PLillGF-RfqbZTASqS42h9G0V956555551'), null);
-console.log('✓ Playlist ID and Single Video ID extractions handle full URLs, query parameters, and raw IDs.');
+console.log('✓ Playlist ID and Single Video ID extractions handle full URLs, query parameters, embeds, shorts, and raw IDs.');
 
 // 2. ISO 8601 Duration Parser
 console.log('Test 2: ISO 8601 Duration Parser...');
@@ -64,20 +66,21 @@ console.log('✓ Level formula accurately matches L = floor(sqrt(XP / 100)) + 1.
 console.log('Test 5: Preset Course Playlist Data Structure & XML Feed Parser...');
 const sampleXml = `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
- <title>Distributed Systems in Go</title>
+ <title>Distributed Systems in Go: Beginner&#x27;s Guide &amp; Raft</title>
  <author><name>MIT OpenCourseWare</name></author>
  <entry>
   <yt:videoId>v1234567890</yt:videoId>
-  <title>Lecture 1: Introduction to Raft</title>
-  <media:description>Consensus algorithms overview</media:description>
+  <title>Lecture 1: Intro to &quot;Fast&quot; Consensus</title>
+  <media:description>Consensus algorithms &amp; fault tolerance</media:description>
   <media:thumbnail url="https://i.ytimg.com/vi/v1234567890/hqdefault.jpg"/>
  </entry>
 </feed>`;
 const parsedFeed = parseYouTubeFeedXml(sampleXml, 'PL_MIT_RAFT', 'Computer Science');
-assert.strictEqual(parsedFeed.title, 'Distributed Systems in Go');
+assert.strictEqual(parsedFeed.title, "Distributed Systems in Go: Beginner's Guide & Raft");
 assert.strictEqual(parsedFeed.channel_title, 'MIT OpenCourseWare');
 assert.strictEqual(parsedFeed.total_lessons, 1);
 assert.strictEqual(parsedFeed.lessons[0].youtube_video_id, 'v1234567890');
+assert.strictEqual(parsedFeed.lessons[0].title, 'Lecture 1: Intro to "Fast" Consensus');
 console.log('✓ YouTube XML Feed parser reliably extracts real titles, channels, and video syllabus.');
 
 async function testFetch() {
