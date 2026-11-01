@@ -1,7 +1,7 @@
 // Self-checking verification test for Stage 4 & 5 (Courses, YouTube Parsing, Gamification Engine)
 
 import assert from 'node:assert';
-import { extractPlaylistId, parseIsoDuration, fetchPlaylistData } from '../src/features/courses/youtubeService.js';
+import { extractPlaylistId, extractVideoId, parseIsoDuration, fetchPlaylistData, parseYouTubeFeedXml } from '../src/features/courses/youtubeService.js';
 import { calculateLevel, calculateStreak } from '../src/features/gamification/gamificationService.js';
 
 console.log('--- RUNNING STAGE 4 & 5 VERIFICATION SUITE ---');
@@ -16,7 +16,10 @@ assert.strictEqual(extractPlaylistId(url2), 'PLsyeobzWxl7poL9JTVyndKe62ieoN-MZ3'
 
 const rawId = 'PLot-Xpze53ldVwtstag2TL4HQhAnC8ksf';
 assert.strictEqual(extractPlaylistId(rawId), 'PLot-Xpze53ldVwtstag2TL4HQhAnC8ksf');
-console.log('✓ Playlist ID extraction handles full URLs, query parameters, and raw IDs.');
+assert.strictEqual(extractVideoId('https://www.youtube.com/watch?v=w7ejDZ8SWv8'), 'w7ejDZ8SWv8');
+assert.strictEqual(extractVideoId('https://youtu.be/bMknfKXIFA8'), 'bMknfKXIFA8');
+assert.strictEqual(extractVideoId('https://www.youtube.com/playlist?list=PLillGF-RfqbZTASqS42h9G0V956555551'), null);
+console.log('✓ Playlist ID and Single Video ID extractions handle full URLs, query parameters, and raw IDs.');
 
 // 2. ISO 8601 Duration Parser
 console.log('Test 2: ISO 8601 Duration Parser...');
@@ -57,8 +60,26 @@ assert.strictEqual(calculateLevel(400).level, 3);
 assert.strictEqual(calculateLevel(900).level, 4);
 console.log('✓ Level formula accurately matches L = floor(sqrt(XP / 100)) + 1.');
 
-// 5. Playlist Data Fetcher
-console.log('Test 5: Preset Course Playlist Data Structure...');
+// 5. Playlist Data Fetcher & XML Feed Parser
+console.log('Test 5: Preset Course Playlist Data Structure & XML Feed Parser...');
+const sampleXml = `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
+ <title>Distributed Systems in Go</title>
+ <author><name>MIT OpenCourseWare</name></author>
+ <entry>
+  <yt:videoId>v1234567890</yt:videoId>
+  <title>Lecture 1: Introduction to Raft</title>
+  <media:description>Consensus algorithms overview</media:description>
+  <media:thumbnail url="https://i.ytimg.com/vi/v1234567890/hqdefault.jpg"/>
+ </entry>
+</feed>`;
+const parsedFeed = parseYouTubeFeedXml(sampleXml, 'PL_MIT_RAFT', 'Computer Science');
+assert.strictEqual(parsedFeed.title, 'Distributed Systems in Go');
+assert.strictEqual(parsedFeed.channel_title, 'MIT OpenCourseWare');
+assert.strictEqual(parsedFeed.total_lessons, 1);
+assert.strictEqual(parsedFeed.lessons[0].youtube_video_id, 'v1234567890');
+console.log('✓ YouTube XML Feed parser reliably extracts real titles, channels, and video syllabus.');
+
 async function testFetch() {
   const data = await fetchPlaylistData('PLillGF-RfqbZTASqS42h9G0V956555551', 'Web Development');
   assert.ok(data.title.includes('React 18'));

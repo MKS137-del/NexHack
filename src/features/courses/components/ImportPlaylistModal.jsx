@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { X, Youtube, Sparkles, Loader2, BookOpen, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { CURATED_PLAYLIST_PRESETS, extractPlaylistId } from '../youtubeService';
+import { X, Youtube, Sparkles, Loader2, BookOpen, AlertCircle, CheckCircle2, Key, ChevronDown, ChevronUp } from 'lucide-react';
+import { CURATED_PLAYLIST_PRESETS, extractPlaylistId, extractVideoId, getYouTubeApiKey } from '../youtubeService';
 import { importPlaylistCourse } from '../courseService';
 
 export function ImportPlaylistModal({ isOpen, onClose, onImportSuccess }) {
@@ -9,10 +9,27 @@ export function ImportPlaylistModal({ isOpen, onClose, onImportSuccess }) {
   const [customTitle, setCustomTitle] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [apiKey, setApiKey] = useState(() => getYouTubeApiKey() || '');
 
   if (!isOpen) return null;
 
   const detectedPlaylistId = extractPlaylistId(url);
+  const detectedVideoId = !detectedPlaylistId ? extractVideoId(url) : null;
+  const isValidTarget = Boolean(detectedPlaylistId || detectedVideoId);
+
+  const handleApiKeyChange = (val) => {
+    setApiKey(val);
+    try {
+      if (val.trim()) {
+        localStorage.setItem('nexhack_youtube_api_key', val.trim());
+      } else {
+        localStorage.removeItem('nexhack_youtube_api_key');
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   const handleSelectPreset = (preset) => {
     setUrl(`https://www.youtube.com/playlist?list=${preset.playlistId}`);
@@ -24,12 +41,12 @@ export function ImportPlaylistModal({ isOpen, onClose, onImportSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!url.trim()) {
-      setError('Please provide a valid YouTube playlist URL or ID.');
+      setError('Please provide a valid YouTube playlist or video URL.');
       return;
     }
 
-    if (!detectedPlaylistId) {
-      setError('Could not extract a valid YouTube playlist ID from the provided URL.');
+    if (!isValidTarget) {
+      setError('Could not extract a valid YouTube playlist or video ID from the provided URL.');
       return;
     }
 
@@ -62,7 +79,7 @@ export function ImportPlaylistModal({ isOpen, onClose, onImportSuccess }) {
             </div>
             <div>
               <h2 className="text-lg font-bold text-white tracking-tight">Import YouTube Playlist</h2>
-              <p className="text-xs text-slate-400">Transform video lectures into trackable study units</p>
+              <p className="text-xs text-slate-400">Transform public video lectures into trackable study courses</p>
             </div>
           </div>
           <button
@@ -86,7 +103,7 @@ export function ImportPlaylistModal({ isOpen, onClose, onImportSuccess }) {
           <form onSubmit={handleSubmit} id="import-form" className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                YouTube Playlist Link or ID
+                YouTube Playlist Link or Video URL
               </label>
               <div className="relative">
                 <input
@@ -97,13 +114,19 @@ export function ImportPlaylistModal({ isOpen, onClose, onImportSuccess }) {
                     if (error) setError(null);
                   }}
                   placeholder="https://www.youtube.com/playlist?list=PL..."
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all pr-32"
                   required
                 />
                 {detectedPlaylistId && (
                   <span className="absolute right-3 top-3.5 inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    Valid ID
+                    Playlist Detected
+                  </span>
+                )}
+                {detectedVideoId && (
+                  <span className="absolute right-3 top-3.5 inline-flex items-center gap-1 text-[11px] font-medium text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-md">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Single Lecture
                   </span>
                 )}
               </div>
@@ -138,13 +161,40 @@ export function ImportPlaylistModal({ isOpen, onClose, onImportSuccess }) {
                 />
               </div>
             </div>
+
+            {/* Optional Custom API Key */}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => setShowApiKey(!showApiKey)}
+                className="text-[11px] text-slate-400 hover:text-slate-200 inline-flex items-center gap-1.5 transition-colors"
+              >
+                <Key className="w-3 h-3 text-brand-400" />
+                <span>Google YouTube Data API v3 Key (Optional)</span>
+                {showApiKey ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </button>
+              {showApiKey && (
+                <div className="mt-2 p-3 bg-slate-950/70 border border-slate-800/80 rounded-xl space-y-1 animate-fade-in">
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => handleApiKeyChange(e.target.value)}
+                    placeholder="AIzaSy... (leave blank to use automatic zero-key feed proxy)"
+                    className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700/70 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500"
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    NexHack automatically fetches YouTube feeds without requiring an API key. If you have your own Google API key, you can enter it here.
+                  </p>
+                </div>
+              )}
+            </div>
           </form>
 
           {/* Evaluator Quick Presets */}
           <div className="space-y-3 pt-2">
             <div className="flex items-center gap-2 text-xs font-semibold text-amber-400">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>One-Click Evaluator Presets</span>
+              <span>Or Select an Instant Curated Demo Course</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {CURATED_PLAYLIST_PRESETS.map((preset) => (
@@ -186,7 +236,7 @@ export function ImportPlaylistModal({ isOpen, onClose, onImportSuccess }) {
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Processing Playlist...</span>
+                <span>Importing Live Course...</span>
               </>
             ) : (
               <>
