@@ -1,7 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const getEnv = () => {
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    return import.meta.env;
+  }
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env;
+  }
+  return {};
+};
+
+const env = getEnv();
+const supabaseUrl = env.VITE_SUPABASE_URL;
+const supabaseAnonKey = env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_ANON_KEY;
 
 // Check if actual credentials were supplied (and not placeholders)
 export const isSupabaseConfigured = Boolean(

@@ -1,20 +1,33 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../features/auth/context/AuthContext';
 import { Flame, Sparkles, Clock, LogOut, User as UserIcon, BookOpen, Layers } from 'lucide-react';
+import { subscribeToGamification, getLocalProfile } from '../../features/gamification/gamificationService';
 
 export function Navbar() {
-  const { profile, logout } = useAuth();
+  const { profile: authProfile, logout } = useAuth();
   const navigate = useNavigate();
+  const [liveProfile, setLiveProfile] = useState(() => getLocalProfile());
+
+  useEffect(() => {
+    const unsubscribe = subscribeToGamification((event) => {
+      if (event.profile) {
+        setLiveProfile(event.profile);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleLogout = async () => {
     await logout();
     navigate('/login');
   };
 
-  const xp = profile?.xp || 0;
-  const level = profile?.level || 1;
-  const streak = profile?.current_streak || 1;
+  const xp = liveProfile?.total_xp ?? authProfile?.xp ?? 450;
+  const level = liveProfile?.current_level ?? authProfile?.level ?? 3;
+  const streak = liveProfile?.streak_days ?? authProfile?.current_streak ?? 5;
+  const displayName = liveProfile?.full_name || liveProfile?.username || authProfile?.display_name || authProfile?.username || 'Learner';
+  const avatarUrl = liveProfile?.avatar_url || authProfile?.avatar_url;
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-800 bg-slate-900/90 backdrop-blur-md">
@@ -80,19 +93,19 @@ export function Navbar() {
               className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
               title="User Profile"
             >
-              {profile?.avatar_url ? (
+              {avatarUrl ? (
                 <img
-                  src={profile.avatar_url}
-                  alt={profile.username}
+                  src={avatarUrl}
+                  alt={displayName}
                   className="w-7 h-7 rounded-full object-cover ring-1 ring-slate-700"
                 />
               ) : (
                 <div className="w-7 h-7 rounded-full bg-brand-700 flex items-center justify-center text-xs font-semibold text-white">
-                  {profile?.username?.charAt(0)?.toUpperCase() || 'U'}
+                  {displayName?.charAt(0)?.toUpperCase() || 'U'}
                 </div>
               )}
               <span className="hidden md:inline text-xs font-medium text-slate-300 max-w-[100px] truncate">
-                {profile?.display_name || profile?.username || 'User'}
+                {displayName}
               </span>
             </Link>
 
