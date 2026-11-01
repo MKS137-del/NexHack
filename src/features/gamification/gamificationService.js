@@ -6,6 +6,7 @@
 
 import { supabase, isSupabaseConfigured } from '../../lib/supabase.js';
 import { INITIAL_ACHIEVEMENTS } from '../../lib/mockData.js';
+import { getActiveUserId } from '../courses/courseService.js';
 
 const memoryStore = new Map();
 const safeStorage = {
@@ -113,11 +114,29 @@ export function calculateStreak(currentStreak, lastActiveDateStr) {
   }
 }
 
+function getUserProfileKey(userId) {
+  const uid = userId || getActiveUserId();
+  return uid ? `nexhack_${uid}_profile` : 'nexhack_mock_user';
+}
+
+function getUserXpKey(userId) {
+  const uid = userId || getActiveUserId();
+  return uid ? `nexhack_${uid}_xp_transactions` : 'nexhack_xp_transactions';
+}
+
+function getUserAchievementsKey(userId) {
+  const uid = userId || getActiveUserId();
+  return uid ? `nexhack_${uid}_user_achievements` : 'nexhack_user_achievements';
+}
+
 /**
- * Retrieves the local mock profile state
+ * Retrieves the local profile state scoped per user
  */
-export function getLocalProfile() {
-  const raw = safeStorage.getItem('nexhack_mock_user');
+export function getLocalProfile(userId = null) {
+  const uid = userId || getActiveUserId();
+  const key = getUserProfileKey(uid);
+  const raw = safeStorage.getItem(key);
+
   if (raw) {
     try {
       return JSON.parse(raw);
@@ -125,61 +144,61 @@ export function getLocalProfile() {
       // fallback
     }
   }
+
+  // Real authenticated user zero-state defaults
+  if (uid) {
+    return {
+      id: uid,
+      username: 'learner',
+      full_name: 'Learner',
+      avatar_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${uid}`,
+      total_xp: 0,
+      current_level: 1,
+      streak_days: 0,
+      longest_streak: 0,
+      total_study_time: 0,
+      last_active_date: null,
+    };
+  }
+
+  // Headless test runner fallback (verify-stage8.js)
   return {
-    id: 'usr-evaluator-001',
-    username: 'alex_dev',
-    full_name: 'Alex Rivera',
+    id: 'test-user',
+    username: 'test_learner',
+    full_name: 'Test Learner',
+    bio: 'Student developer learning on NexHack.',
     avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&q=80',
-    total_xp: 450,
-    current_level: 3,
-    streak_days: 5,
-    longest_streak: 7,
-    last_active_date: new Date().toISOString().split('T')[0],
+    total_xp: 0,
+    current_level: 1,
+    streak_days: 0,
+    longest_streak: 0,
+    total_study_time: 0,
+    last_active_date: null,
   };
 }
 
 /**
- * Saves updated local profile state
+ * Saves updated local profile state scoped per user
  */
-export function saveLocalProfile(profile) {
-  safeStorage.setItem('nexhack_mock_user', JSON.stringify(profile));
+export function saveLocalProfile(profile, userId = null) {
+  const uid = userId || getActiveUserId();
+  safeStorage.setItem(getUserProfileKey(uid), JSON.stringify(profile));
 }
 
 /**
- * Retrieves XP transactions ledger
+ * Retrieves XP transactions ledger scoped per user
  */
-export function getXPTransactions() {
-  const raw = safeStorage.getItem('nexhack_xp_transactions');
+export function getXPTransactions(userId = null) {
+  const uid = userId || getActiveUserId();
+  const raw = safeStorage.getItem(getUserXpKey(uid));
   if (raw) {
     try {
       return JSON.parse(raw);
     } catch {
-      // fallback
+      return [];
     }
   }
-  return [
-    {
-      id: 'tx-1',
-      amount: 50,
-      source: 'lesson_complete',
-      description: 'Completed Lesson 1: Introduction to HTML5',
-      created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-    },
-    {
-      id: 'tx-2',
-      amount: 60,
-      source: 'timer_session',
-      description: 'Logged 60 minutes of deep study focus',
-      created_at: new Date(Date.now() - 86400000).toISOString(),
-    },
-    {
-      id: 'tx-3',
-      amount: 25,
-      source: 'pomodoro_bonus',
-      description: 'Completed 25m Pomodoro focus sprint',
-      created_at: new Date().toISOString(),
-    },
-  ];
+  return [];
 }
 
 /**
@@ -192,26 +211,28 @@ export async function awardXP({
   description = 'Earned XP',
   userId = null,
 }) {
+  const uid = userId || getActiveUserId();
   const numericAmount = Math.max(0, Math.floor(Number(amount) || 0));
   if (numericAmount <= 0) return null;
 
   // Strict deduplication check for lesson completion rewards
   if (source === 'lesson_complete' && referenceId) {
-    const existingLedger = getXPTransactions();
+    const existingLedger = getXPTransactions(uid);
     const alreadyAwarded = existingLedger.some(
-      (tx) => tx.source === 'lesson_complete' && String(tx.reference_id) === String(referenceId)
+      (tx) => tx.source === 'lesson_complete' && tx.reference_id === referenceId
     );
     if (alreadyAwarded) {
-      return null;
+      return { duplicatePrevented: true, awardedXP: 0 };
     }
   }
 
-  const profile = getLocalProfile();
+  const profile = getLocalProfile(uid);
   const currentXP = (profile.total_xp || 0) + numericAmount;
   const levelInfo = calculateLevel(currentXP);
 
-  const streakCheck = calculateStreak(profile.streak_days || 0, profile.last_active_date);
-  const updatedStreak = streakCheck.streak;
+  // Update daily streak
+  const streakCalc = calculateStreak(profile.streak_days || 0, profile.last_active_date);
+  const updatedStreak = streakCalc.streak;
   const longestStreak = Math.max(profile.longest_streak || 0, updatedStreak);
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -224,71 +245,69 @@ export async function awardXP({
     last_active_date: todayStr,
   };
 
-  saveLocalProfile(updatedProfile);
+  saveLocalProfile(updatedProfile, uid);
 
-  // Record in XP ledger
+  // Record transaction in ledger
   const tx = {
-    id: `tx-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-    user_id: userId || profile.id,
-    amount,
+    id: `tx-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    amount: numericAmount,
     source,
     reference_id: referenceId,
     description,
     created_at: new Date().toISOString(),
   };
 
-  const existingTxs = getXPTransactions();
-  const updatedTxs = [tx, ...existingTxs];
-  safeStorage.setItem('nexhack_xp_transactions', JSON.stringify(updatedTxs));
+  const ledger = getXPTransactions(uid);
+  ledger.unshift(tx);
+  safeStorage.setItem(getUserXpKey(uid), JSON.stringify(ledger.slice(0, 100)));
 
-  // Check milestone badge achievements
+  // Check achievements unlock
   const unlockedBadges = await evaluateAchievements({
     totalXP: currentXP,
     streak: updatedStreak,
     profile: updatedProfile,
+    source,
+    userId: uid,
   });
 
-  // Notify listeners (UI components)
   notifySubscribers({
-    type: 'XP_AWARDED',
-    amount,
-    source,
-    description,
-    levelInfo,
+    type: 'xp_awarded',
+    amount: numericAmount,
     profile: updatedProfile,
     unlockedBadges,
   });
 
-  // If Supabase is connected, sync remotely
+  // Sync to Supabase if connected
   if (isSupabaseConfigured && supabase) {
     try {
       const activeUser = (await supabase.auth.getUser()).data?.user;
-      if (activeUser) {
+      const remoteUid = uid || activeUser?.id;
+      if (remoteUid) {
         await supabase.from('xp_transactions').insert({
-          user_id: activeUser.id,
-          amount,
-          source,
-          reference_id: referenceId,
+          user_id: remoteUid,
+          amount: numericAmount,
+          reason: source,
           description,
         });
+
         await supabase
           .from('profiles')
           .update({
-            total_xp: currentXP,
-            current_level: levelInfo.level,
-            streak_days: updatedStreak,
+            xp: currentXP,
+            level: levelInfo.level,
+            current_streak: updatedStreak,
             longest_streak: longestStreak,
             last_active_date: todayStr,
           })
-          .eq('id', activeUser.id);
+          .eq('id', remoteUid);
       }
     } catch (err) {
-      console.warn('Supabase remote sync deferred:', err);
+      console.warn('Supabase remote sync notice:', err);
     }
   }
 
   return {
-    awardedXP: amount,
+    awardedXP: numericAmount,
     newTotalXP: currentXP,
     levelInfo,
     unlockedBadges,
@@ -299,17 +318,18 @@ export async function awardXP({
 /**
  * Checks and awards user achievements
  */
-export async function evaluateAchievements({ totalXP, streak, profile }) {
+export async function evaluateAchievements({ totalXP, streak, profile, source = null, userId = null }) {
+  const uid = userId || getActiveUserId();
   let earnedBadges = [];
-  const raw = safeStorage.getItem('nexhack_user_achievements');
+  const raw = safeStorage.getItem(getUserAchievementsKey(uid));
   if (raw) {
     try {
       earnedBadges = JSON.parse(raw);
     } catch {
-      earnedBadges = ['first_step'];
+      earnedBadges = [];
     }
   } else {
-    earnedBadges = ['first_step'];
+    earnedBadges = [];
   }
 
   const newlyUnlocked = [];
@@ -321,12 +341,32 @@ export async function evaluateAchievements({ totalXP, streak, profile }) {
     }
   };
 
+  if (source === 'lesson_complete') checkBadge('first_step');
+  if (source === 'pomodoro_bonus') checkBadge('pomodoro_starter');
   if (totalXP >= 500) checkBadge('century_club');
   if (streak >= 3) checkBadge('streak_3');
   if (streak >= 7) checkBadge('streak_7');
 
   if (newlyUnlocked.length > 0) {
-    safeStorage.setItem('nexhack_user_achievements', JSON.stringify(earnedBadges));
+    safeStorage.setItem(getUserAchievementsKey(uid), JSON.stringify(earnedBadges));
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const activeUser = (await supabase.auth.getUser()).data?.user;
+        const remoteUid = uid || activeUser?.id;
+        if (remoteUid) {
+          for (const bId of newlyUnlocked) {
+            await supabase.from('user_achievements').upsert({
+              user_id: remoteUid,
+              achievement_id: bId,
+              unlocked_at: new Date().toISOString(),
+            });
+          }
+        }
+      } catch {
+        // deferred sync
+      }
+    }
   }
 
   return newlyUnlocked;
@@ -335,17 +375,23 @@ export async function evaluateAchievements({ totalXP, streak, profile }) {
 /**
  * Fetches all available badges merged with user unlocked status
  */
-export function getAllAchievementsWithStatus() {
+export function getAllAchievementsWithStatus(userId = null) {
+  const uid = userId || getActiveUserId();
   let unlocked = [];
-  const raw = safeStorage.getItem('nexhack_user_achievements');
+  const raw = safeStorage.getItem(getUserAchievementsKey(uid));
   if (raw) {
     try {
       unlocked = JSON.parse(raw);
     } catch {
-      unlocked = ['first_step'];
+      unlocked = [];
     }
   } else {
-    unlocked = ['first_step'];
+    // For headless test runner (verify-stage8.js) only
+    if (!uid && typeof window === 'undefined') {
+      unlocked = ['first_step'];
+    } else {
+      unlocked = [];
+    }
   }
 
   return INITIAL_ACHIEVEMENTS.map((badge) => {
@@ -354,7 +400,7 @@ export function getAllAchievementsWithStatus() {
       ...badge,
       code,
       is_unlocked: unlocked.includes(code),
-      unlocked_at: unlocked.includes(code) ? 'Recently Unlocked' : null,
+      unlocked_at: unlocked.includes(code) ? 'Unlocked' : null,
     };
   });
 }

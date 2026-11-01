@@ -9,6 +9,7 @@ export function SignUpPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
+  const [successInfo, setSuccessInfo] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
   const { signup } = useAuth();
@@ -17,6 +18,7 @@ export function SignUpPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+    setSuccessInfo(null);
 
     if (password.length < 6) {
       setError('Password must be at least 6 characters long.');
@@ -28,6 +30,8 @@ export function SignUpPage() {
       const res = await signup({ email, password, username, displayName });
       if (res.error) {
         setError(res.error.message || 'Failed to create account.');
+      } else if (res.data?.user && !res.data?.session) {
+        setSuccessInfo('Account created successfully! Please check your email inbox to confirm your account, then log in.');
       } else {
         navigate('/', { replace: true });
       }
@@ -56,6 +60,13 @@ export function SignUpPage() {
             <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
+            </div>
+          )}
+
+          {successInfo && (
+            <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+              <span>{successInfo}</span>
             </div>
           )}
 

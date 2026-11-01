@@ -258,62 +258,70 @@ export function LeaderboardPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80">
-              {rankings.map((user) => (
-                <tr
-                  key={user.id}
-                  className={`hover:bg-slate-800/40 transition-colors ${
-                    user.is_current_user
-                      ? 'bg-brand-600/10 border-l-4 border-l-brand-500 font-semibold'
-                      : ''
-                  }`}
-                >
-                  <td className="py-3.5 px-4 text-center">
-                    {user.rank === 1 ? (
-                      <span className="inline-flex w-7 h-7 rounded-full bg-amber-500/20 text-amber-400 font-black items-center justify-center text-xs">
-                        1
-                      </span>
-                    ) : user.rank === 2 ? (
-                      <span className="inline-flex w-7 h-7 rounded-full bg-slate-400/20 text-slate-300 font-bold items-center justify-center text-xs">
-                        2
-                      </span>
-                    ) : user.rank === 3 ? (
-                      <span className="inline-flex w-7 h-7 rounded-full bg-amber-700/20 text-amber-500 font-bold items-center justify-center text-xs">
-                        3
-                      </span>
-                    ) : (
-                      <span className="text-slate-400 font-medium">#{user.rank}</span>
-                    )}
-                  </td>
-                  <td className="py-3.5 px-4">
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={user.avatar}
-                        alt={user.name}
-                        className="w-8 h-8 rounded-full object-cover ring-1 ring-slate-700 shrink-0"
-                      />
-                      <div>
-                        <span className="text-slate-200 font-medium">{user.name}</span>
-                        <span className="text-[10px] text-slate-500 block">@{user.username}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-3.5 px-4 text-right font-bold text-amber-400">
-                    {user.xp.toLocaleString()} XP
-                  </td>
-                  <td className="py-3.5 px-4 text-right text-slate-300 font-medium">
-                    {user.studyHours}h
-                  </td>
-                  <td className="py-3.5 px-4 text-right text-slate-300 font-medium">
-                    {user.lessons}
-                  </td>
-                  <td className="py-3.5 px-4 text-right">
-                    <span className="inline-flex items-center gap-1 text-orange-400 font-semibold">
-                      <Flame className="w-3.5 h-3.5 fill-current" />
-                      {user.streak}d
-                    </span>
+              {rankings.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-slate-500">
+                    No leaderboard rankings recorded yet. Complete a study session or finish a lesson to appear on the leaderboard!
                   </td>
                 </tr>
-              ))}
+              ) : (
+                rankings.map((user) => (
+                  <tr
+                    key={user.id}
+                    className={`hover:bg-slate-800/40 transition-colors ${
+                      user.is_current_user
+                        ? 'bg-brand-600/10 border-l-4 border-l-brand-500 font-semibold'
+                        : ''
+                    }`}
+                  >
+                    <td className="py-3.5 px-4 text-center">
+                      {user.rank === 1 ? (
+                        <span className="inline-flex w-7 h-7 rounded-full bg-amber-500/20 text-amber-400 font-black items-center justify-center text-xs">
+                          1
+                        </span>
+                      ) : user.rank === 2 ? (
+                        <span className="inline-flex w-7 h-7 rounded-full bg-slate-400/20 text-slate-300 font-bold items-center justify-center text-xs">
+                          2
+                        </span>
+                      ) : user.rank === 3 ? (
+                        <span className="inline-flex w-7 h-7 rounded-full bg-amber-700/20 text-amber-500 font-bold items-center justify-center text-xs">
+                          3
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-medium">#{user.rank}</span>
+                      )}
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={user.avatar}
+                          alt={user.name}
+                          className="w-8 h-8 rounded-full object-cover ring-1 ring-slate-700 shrink-0"
+                        />
+                        <div>
+                          <span className="text-slate-200 font-medium">{user.name}</span>
+                          <span className="text-[10px] text-slate-500 block">@{user.username}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-4 text-right font-bold text-amber-400">
+                      {user.xp.toLocaleString()} XP
+                    </td>
+                    <td className="py-3.5 px-4 text-right text-slate-300 font-medium">
+                      {user.studyHours}h
+                    </td>
+                    <td className="py-3.5 px-4 text-right text-slate-300 font-medium">
+                      {user.lessons}
+                    </td>
+                    <td className="py-3.5 px-4 text-right">
+                      <span className="inline-flex items-center gap-1 text-orange-400 font-semibold">
+                        <Flame className="w-3.5 h-3.5 fill-current" />
+                        {user.streak}d
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

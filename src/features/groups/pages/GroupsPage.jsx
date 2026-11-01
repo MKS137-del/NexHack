@@ -217,14 +217,36 @@ export function GroupsPage() {
           ))}
         </div>
       ) : filteredGroups.length === 0 ? (
-        <div className="p-12 text-center rounded-3xl bg-slate-900/40 border border-slate-800 space-y-3">
-          <Users className="w-10 h-10 text-slate-600 mx-auto" />
-          <h3 className="text-base font-bold text-white">No cohorts found in this tab</h3>
-          <p className="text-xs text-slate-400">
-            {activeTab === 'my-groups'
-              ? 'Join a public group or enter a private invite code to get started.'
-              : 'Try searching for different keywords or create your own group!'}
-          </p>
+        <div className="p-12 text-center rounded-3xl bg-slate-900/40 border border-slate-800 space-y-4 shadow-sm">
+          <Users className="w-12 h-12 text-slate-600 mx-auto" />
+          <div className="max-w-md mx-auto">
+            <h3 className="text-base sm:text-lg font-bold text-white">
+              {activeTab === 'my-groups'
+                ? "You Haven't Joined Any Study Groups Yet"
+                : "No Cohorts Found in This Category"}
+            </h3>
+            <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+              {activeTab === 'my-groups'
+                ? 'Join a public peer cohort, enter a private invite code, or create your own cohort to build collective accountability.'
+                : 'Try searching for different terms or create a new public cohort for your peers.'}
+            </p>
+          </div>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            {activeTab === 'my-groups' && (
+              <button
+                onClick={() => setActiveTab('explore')}
+                className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold transition-all shadow-sm"
+              >
+                Explore Public Cohorts
+              </button>
+            )}
+            <button
+              onClick={() => setIsCreateOpen(true)}
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors border border-slate-700"
+            >
+              Create New Group
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

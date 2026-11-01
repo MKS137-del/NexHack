@@ -78,6 +78,16 @@ export function InsightsPage() {
         </p>
       </div>
 
+      {/* Zero Activity Notice Banner */}
+      {Number(kpi.totalStudyHours) === 0 && kpi.totalXP === 0 && (
+        <div className="p-4 rounded-2xl bg-brand-900/20 border border-brand-500/30 text-xs text-brand-300 flex items-center gap-3">
+          <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+          <span>
+            Welcome to your analytics hub! Your focus charts, daily velocity, and verified audit logs will automatically populate as you record study sessions and finish lessons.
+          </span>
+        </div>
+      )}
+
       {/* 4 KPI Metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-sm space-y-3">
@@ -89,9 +99,15 @@ export function InsightsPage() {
           </div>
           <div>
             <div className="text-2xl font-bold text-white">{kpi.totalStudyHours} hrs</div>
-            <p className="text-[11px] text-emerald-400 font-medium flex items-center gap-1 mt-0.5">
-              <ArrowUpRight className="w-3.5 h-3.5" />
-              <span>+18% from last week</span>
+            <p className="text-[11px] text-slate-400 font-medium flex items-center gap-1 mt-0.5">
+              {Number(kpi.totalStudyHours) > 0 ? (
+                <>
+                  <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-emerald-400">Authenticated study recorded</span>
+                </>
+              ) : (
+                <span>No timer sessions recorded yet</span>
+              )}
             </p>
           </div>
         </div>
@@ -131,7 +147,9 @@ export function InsightsPage() {
           </div>
           <div>
             <div className="text-2xl font-bold text-white">{kpi.currentStreak} Days</div>
-            <p className="text-[11px] text-slate-400 mt-0.5">Longest: {kpi.longestStreak} days</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              {kpi.currentStreak > 0 ? `Longest: ${kpi.longestStreak} days` : 'Log a session today to start'}
+            </p>
           </div>
         </div>
       </div>
@@ -236,26 +254,32 @@ export function InsightsPage() {
           <p className="text-xs text-slate-400">Study distribution across enrolled domains</p>
 
           <div className="space-y-4 pt-2">
-            {categoryDistribution.map((item, idx) => (
-              <div key={item.name} className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium text-slate-300">{item.name}</span>
-                  <span className="text-slate-500 font-semibold">{item.value} units</span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      idx === 0
-                        ? 'bg-brand-500'
-                        : idx === 1
-                        ? 'bg-indigo-400'
-                        : 'bg-emerald-400'
-                    }`}
-                    style={{ width: `${Math.min(100, item.value * 20)}%` }}
-                  />
-                </div>
+            {categoryDistribution.length === 0 || categoryDistribution.every((c) => c.value === 0) ? (
+              <div className="py-8 text-center text-xs text-slate-500">
+                No course enrollments yet. Import courses to visualize curriculum breakdown.
               </div>
-            ))}
+            ) : (
+              categoryDistribution.map((item, idx) => (
+                <div key={item.name} className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-slate-300">{item.name}</span>
+                    <span className="text-slate-500 font-semibold">{item.value} units</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        idx === 0
+                          ? 'bg-brand-500'
+                          : idx === 1
+                          ? 'bg-indigo-400'
+                          : 'bg-emerald-400'
+                      }`}
+                      style={{ width: `${Math.min(100, item.value * 20)}%` }}
+                    />
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -274,33 +298,39 @@ export function InsightsPage() {
             </span>
           </div>
 
-          <div className="divide-y divide-slate-800 max-h-64 overflow-y-auto pr-1">
-            {recentSessions.map((sess) => (
-              <div key={sess.id} className="py-3 flex items-center justify-between gap-3 text-xs">
-                <div className="min-w-0">
-                  <p className="font-semibold text-slate-200 truncate">
-                    {sess.course_title || 'General Focus Session'}
-                  </p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    {new Date(sess.ended_at).toLocaleDateString()} at{' '}
-                    {new Date(sess.ended_at).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}{' '}
-                    • <span className="capitalize">{sess.mode}</span>
-                  </p>
+          {recentSessions.length === 0 ? (
+            <div className="py-12 text-center text-xs text-slate-500">
+              No verified study sessions recorded yet. Launch the Pomodoro timer to clock your first focus session.
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-800 max-h-64 overflow-y-auto pr-1">
+              {recentSessions.map((sess) => (
+                <div key={sess.id} className="py-3 flex items-center justify-between gap-3 text-xs">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-200 truncate">
+                      {sess.course_title || 'General Focus Session'}
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      {new Date(sess.ended_at).toLocaleDateString()} at{' '}
+                      {new Date(sess.ended_at).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}{' '}
+                      • <span className="capitalize">{sess.mode}</span>
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-slate-300 font-medium">
+                      {Math.round((sess.duration_seconds || 0) / 60)} mins
+                    </span>
+                    <span className="font-bold text-amber-400 px-2 py-0.5 rounded bg-amber-400/10">
+                      +{sess.xp_earned || 0} XP
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-slate-300 font-medium">
-                    {Math.round((sess.duration_seconds || 0) / 60)} mins
-                  </span>
-                  <span className="font-bold text-amber-400 px-2 py-0.5 rounded bg-amber-400/10">
-                    +{sess.xp_earned || 0} XP
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

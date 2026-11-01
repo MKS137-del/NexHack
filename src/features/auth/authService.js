@@ -44,7 +44,7 @@ export const authService = {
         if (authError) return { data: null, error: authError };
 
         // Profile row is typically created via Supabase trigger on auth.users,
-        // but we also ensure profile exists here.
+        // but we also ensure profile exists here with genuine 0-stat defaults.
         if (authData.user) {
           const { error: profileError } = await supabase
             .from('profiles')
@@ -54,9 +54,9 @@ export const authService = {
               display_name: displayName || username,
               xp: 0,
               level: 1,
-              current_streak: 1,
-              longest_streak: 1,
-              last_active_date: new Date().toISOString().split('T')[0],
+              current_streak: 0,
+              longest_streak: 0,
+              last_active_date: null,
               total_study_time: 0,
             });
 
@@ -87,11 +87,11 @@ export const authService = {
       username,
       display_name: displayName || username,
       avatar_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${username}`,
-      xp: 100, // Starter welcome bonus
+      xp: 0, // Genuine 0 XP
       level: 1,
-      current_streak: 1,
-      longest_streak: 1,
-      last_active_date: new Date().toISOString().split('T')[0],
+      current_streak: 0, // Genuine 0 streak
+      longest_streak: 0,
+      last_active_date: null,
       total_study_time: 0,
       created_at: new Date().toISOString(),
     };
@@ -128,28 +128,11 @@ export const authService = {
       (p) => p.email?.toLowerCase() === email.toLowerCase() || p.username?.toLowerCase() === email.toLowerCase()
     );
 
-    // If demo user doesn't exist yet, auto-create student profile for fast demo evaluation
-    const userProfile = found || {
-      id: 'demo-student-id',
-      email: email,
-      username: email.split('@')[0] || 'student',
-      display_name: 'Student Learner',
-      avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
-      xp: 250,
-      level: 2,
-      current_streak: 3,
-      longest_streak: 5,
-      last_active_date: new Date().toISOString().split('T')[0],
-      total_study_time: 5400, // 90 mins
-      created_at: new Date(Date.now() - 86400000 * 4).toISOString(),
-    };
-
     if (!found) {
-      profiles[userProfile.id] = userProfile;
-      saveMockProfiles(profiles);
+      return { data: null, error: new Error('Account not found. Please register a new account.') };
     }
 
-    const mockSession = { user: userProfile, access_token: 'mock-jwt-' + userProfile.id };
+    const mockSession = { user: found, access_token: 'mock-jwt-' + found.id };
     localStorage.setItem(MOCK_SESSION_KEY, JSON.stringify(mockSession));
 
     return { data: mockSession, error: null };
@@ -159,6 +142,7 @@ export const authService = {
    * Log out current user
    */
   async signOut() {
+    localStorage.removeItem(MOCK_SESSION_KEY);
     if (isSupabaseConfigured) {
       try {
         const { error } = await supabase.auth.signOut();
@@ -168,7 +152,6 @@ export const authService = {
       }
     }
 
-    localStorage.removeItem(MOCK_SESSION_KEY);
     return { error: null };
   },
 
@@ -198,14 +181,35 @@ export const authService = {
    * Retrieve full user profile
    */
   async getProfile(userId) {
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', userId)
           .single();
-        return { data, error };
+
+        if (data) return { data, error: null };
+
+        // Fallback default profile if table row pending
+        const { data: authUser } = await supabase.auth.getUser();
+        if (authUser?.user && authUser.user.id === userId) {
+          const defaultProfile = {
+            id: authUser.user.id,
+            username: authUser.user.user_metadata?.username || authUser.user.email?.split('@')[0] || 'learner',
+            display_name: authUser.user.user_metadata?.display_name || authUser.user.email?.split('@')[0] || 'Learner',
+            avatar_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${authUser.user.id}`,
+            xp: 0,
+            level: 1,
+            current_streak: 0,
+            longest_streak: 0,
+            total_study_time: 0,
+            last_active_date: null,
+          };
+          return { data: defaultProfile, error: null };
+        }
+
+        return { data: null, error };
       } catch (err) {
         return { data: null, error: err };
       }

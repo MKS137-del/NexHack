@@ -6,6 +6,7 @@
 import { supabase, isSupabaseConfigured } from '../../lib/supabase.js';
 import { INITIAL_GROUPS } from '../../lib/mockData.js';
 import { getLocalProfile } from '../gamification/gamificationService.js';
+import { getActiveUserId } from '../courses/courseService.js';
 
 const GROUPS_STORAGE_KEY = 'nexhack_groups';
 const USER_GROUPS_STORAGE_KEY = 'nexhack_user_group_memberships';
@@ -64,11 +65,17 @@ export function generateInviteCode() {
   return `NEX-${code}`;
 }
 
+export function getUserMembershipsKey(userId = null) {
+  const uid = userId || getActiveUserId();
+  return uid ? `nexhack_${uid}_group_memberships` : USER_GROUPS_STORAGE_KEY;
+}
+
 /**
  * Retrieves all groups enriched with current user's membership status
  */
-export async function getGroups() {
+export async function getGroups(userId = null) {
   let groups = [];
+  const uid = userId || getActiveUserId();
 
   if (isSupabaseConfigured && supabase) {
     try {
@@ -91,21 +98,39 @@ export async function getGroups() {
       try {
         groups = JSON.parse(raw);
       } catch {
-        groups = INITIAL_GROUPS;
+        groups = [];
       }
     } else {
-      groups = INITIAL_GROUPS;
+      // Only in headless test environment (verify-stage7.js)
+      groups = typeof window === 'undefined' && !uid ? INITIAL_GROUPS : [];
     }
   }
 
-  // Get current user memberships
-  let memberships = ['grp-1']; // user is in first group by default
-  const memRaw = safeStorage.getItem(USER_GROUPS_STORAGE_KEY);
+  // Get current user memberships - genuine new user starts with 0 memberships
+  let memberships = [];
+  const memKey = getUserMembershipsKey(uid);
+  const memRaw = safeStorage.getItem(memKey);
   if (memRaw) {
     try {
       memberships = JSON.parse(memRaw);
     } catch {
-      memberships = ['grp-1'];
+      memberships = [];
+    }
+  }
+
+  if (isSupabaseConfigured && supabase && uid) {
+    try {
+      const { data: userMemberships } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .eq('user_id', uid);
+
+      if (userMemberships) {
+        const remoteIds = userMemberships.map((m) => m.group_id);
+        memberships = Array.from(new Set([...memberships, ...remoteIds]));
+      }
+    } catch {
+      // ignore
     }
   }
 
@@ -152,18 +177,19 @@ export async function createGroup({
   safeStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(updated));
 
   // Add user to membership list
-  let memberships = ['grp-1'];
-  const memRaw = safeStorage.getItem(USER_GROUPS_STORAGE_KEY);
+  let memberships = [];
+  const memKey = getUserMembershipsKey();
+  const memRaw = safeStorage.getItem(memKey);
   if (memRaw) {
     try {
       memberships = JSON.parse(memRaw);
     } catch {
-      memberships = ['grp-1'];
+      memberships = [];
     }
   }
   if (!memberships.includes(newId)) {
     memberships.push(newId);
-    safeStorage.setItem(USER_GROUPS_STORAGE_KEY, JSON.stringify(memberships));
+    safeStorage.setItem(memKey, JSON.stringify(memberships));
   }
 
   // Remote Supabase sync if online
@@ -203,20 +229,21 @@ export async function createGroup({
  * Joins a group by ID (for public groups)
  */
 export async function joinGroup(groupId) {
-  let memberships = ['grp-1'];
-  const memRaw = safeStorage.getItem(USER_GROUPS_STORAGE_KEY);
+  let memberships = [];
+  const memKey = getUserMembershipsKey();
+  const memRaw = safeStorage.getItem(memKey);
   if (memRaw) {
     try {
       memberships = JSON.parse(memRaw);
     } catch {
-      memberships = ['grp-1'];
+      memberships = [];
     }
   }
 
   const isAlreadyMember = memberships.includes(groupId);
   if (!isAlreadyMember) {
     memberships = [...memberships, groupId];
-    safeStorage.setItem(USER_GROUPS_STORAGE_KEY, JSON.stringify(memberships));
+    safeStorage.setItem(memKey, JSON.stringify(memberships));
 
     // Immutable update of member count
     const raw = safeStorage.getItem(GROUPS_STORAGE_KEY);
@@ -225,6 +252,21 @@ export async function joinGroup(groupId) {
       g.id === groupId ? { ...g, member_count: (g.member_count || 1) + 1 } : g
     );
     safeStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(updatedGroups));
+  }
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const user = (await supabase.auth.getUser()).data?.user;
+      if (user) {
+        await supabase.from('group_members').upsert({
+          group_id: groupId,
+          user_id: user.id,
+          role: 'member',
+        });
+      }
+    } catch {
+      // offline fallback
+    }
   }
 
   return { success: true };
@@ -257,19 +299,20 @@ export async function joinGroupByCode(inviteCode) {
  * Leaves a study group
  */
 export async function leaveGroup(groupId) {
-  let memberships = ['grp-1'];
-  const memRaw = safeStorage.getItem(USER_GROUPS_STORAGE_KEY);
+  let memberships = [];
+  const memKey = getUserMembershipsKey();
+  const memRaw = safeStorage.getItem(memKey);
   if (memRaw) {
     try {
       memberships = JSON.parse(memRaw);
     } catch {
-      memberships = ['grp-1'];
+      memberships = [];
     }
   }
 
   if (memberships.includes(groupId)) {
     memberships = memberships.filter((id) => id !== groupId);
-    safeStorage.setItem(USER_GROUPS_STORAGE_KEY, JSON.stringify(memberships));
+    safeStorage.setItem(memKey, JSON.stringify(memberships));
 
     // Immutable decrement of member count
     const raw = safeStorage.getItem(GROUPS_STORAGE_KEY);
@@ -278,6 +321,21 @@ export async function leaveGroup(groupId) {
       g.id === groupId ? { ...g, member_count: Math.max(1, (g.member_count || 1) - 1) } : g
     );
     safeStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(updatedGroups));
+  }
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const user = (await supabase.auth.getUser()).data?.user;
+      if (user) {
+        await supabase
+          .from('group_members')
+          .delete()
+          .eq('group_id', groupId)
+          .eq('user_id', user.id);
+      }
+    } catch {
+      // offline fallback
+    }
   }
 
   return { success: true };

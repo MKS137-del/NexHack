@@ -23,9 +23,9 @@ export function Navbar() {
     navigate('/login');
   };
 
-  const xp = liveProfile?.total_xp ?? authProfile?.xp ?? 450;
-  const level = liveProfile?.current_level ?? authProfile?.level ?? 3;
-  const streak = liveProfile?.streak_days ?? authProfile?.current_streak ?? 5;
+  const xp = liveProfile?.total_xp ?? authProfile?.xp ?? 0;
+  const level = liveProfile?.current_level ?? authProfile?.level ?? 1;
+  const streak = liveProfile?.streak_days ?? authProfile?.current_streak ?? 0;
   const displayName = liveProfile?.full_name || liveProfile?.username || authProfile?.display_name || authProfile?.username || 'Learner';
   const avatarUrl = liveProfile?.avatar_url || authProfile?.avatar_url;
 

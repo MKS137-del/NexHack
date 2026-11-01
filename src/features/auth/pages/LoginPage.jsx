@@ -33,23 +33,6 @@ export function LoginPage() {
     }
   };
 
-  const handleQuickDemo = async () => {
-    setError(null);
-    setSubmitting(true);
-    try {
-      const res = await login({ email: 'student@nexhack.edu', password: 'demo-password-123' });
-      if (res.error) {
-        setError(res.error.message);
-      } else {
-        navigate(from, { replace: true });
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
@@ -65,27 +48,6 @@ export function LoginPage() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-slate-900/90 border border-slate-800 py-8 px-6 shadow-2xl rounded-2xl sm:px-10 backdrop-blur-sm">
-          {/* Quick Demo Action for Evaluators */}
-          <div className="mb-6">
-            <button
-              type="button"
-              onClick={handleQuickDemo}
-              disabled={submitting}
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-semibold bg-gradient-to-r from-brand-600 to-indigo-500 hover:from-brand-500 hover:to-indigo-400 text-white shadow-md shadow-brand-500/25 transition-all"
-            >
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              <span>One-Click Hackathon Evaluator Login</span>
-            </button>
-            <div className="relative my-4">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-800" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-slate-900 px-2 text-slate-400">Or sign in with email</span>
-              </div>
-            </div>
-          </div>
-
           {error && (
             <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />

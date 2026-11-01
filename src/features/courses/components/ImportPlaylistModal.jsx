@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { X, Youtube, Sparkles, Loader2, BookOpen, AlertCircle, CheckCircle2, Key, ChevronDown, ChevronUp } from 'lucide-react';
-import { CURATED_PLAYLIST_PRESETS, extractPlaylistId, extractVideoId, getYouTubeApiKey } from '../youtubeService';
+import { X, Youtube, Loader2, BookOpen, AlertCircle, CheckCircle2, Key, ChevronDown, ChevronUp } from 'lucide-react';
+import { extractPlaylistId, extractVideoId, getYouTubeApiKey } from '../youtubeService';
 import { importPlaylistCourse } from '../courseService';
 
 export function ImportPlaylistModal({ isOpen, onClose, onImportSuccess }) {
@@ -29,13 +29,6 @@ export function ImportPlaylistModal({ isOpen, onClose, onImportSuccess }) {
     } catch {
       // ignore
     }
-  };
-
-  const handleSelectPreset = (preset) => {
-    setUrl(`https://www.youtube.com/playlist?list=${preset.playlistId}`);
-    setCategory(preset.category);
-    setCustomTitle(preset.title);
-    setError(null);
   };
 
   const handleSubmit = async (e) => {
@@ -193,31 +186,6 @@ export function ImportPlaylistModal({ isOpen, onClose, onImportSuccess }) {
             </div>
           </form>
 
-          {/* Evaluator Quick Presets */}
-          <div className="space-y-3 pt-2">
-            <div className="flex items-center gap-2 text-xs font-semibold text-amber-400">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Or Select an Instant Curated Demo Course</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {CURATED_PLAYLIST_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => handleSelectPreset(preset)}
-                  className="text-left p-3 rounded-xl border border-slate-800 bg-slate-950/60 hover:bg-slate-800 hover:border-slate-700 transition-all group"
-                >
-                  <p className="text-xs font-semibold text-white group-hover:text-brand-300 transition-colors line-clamp-1">
-                    {preset.title}
-                  </p>
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1">
-                    <span>{preset.channel}</span>
-                    <span className="text-brand-400 font-medium">{preset.lessons.length} lessons</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Footer */}

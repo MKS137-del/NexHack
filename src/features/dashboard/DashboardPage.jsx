@@ -25,10 +25,10 @@ import {
 export function DashboardPage() {
   const { profile: authProfile } = useAuth();
   const [courses, setCourses] = useState([]);
-  const [completedLessonCount, setCompletedLessonCount] = useState(1);
+  const [completedLessonCount, setCompletedLessonCount] = useState(0);
   const [liveProfile, setLiveProfile] = useState(() => getLocalProfile());
   const [achievements, setAchievements] = useState(() => getAllAchievementsWithStatus());
-  const [totalStudySeconds, setTotalStudySeconds] = useState(5400);
+  const [totalStudySeconds, setTotalStudySeconds] = useState(0);
 
   useEffect(() => {
     // 1. Fetch current courses, completed lessons, and study sessions
@@ -40,7 +40,7 @@ export function DashboardPage() {
 
     getStudySessions().then((sessions) => {
       const added = (sessions || []).reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
-      setTotalStudySeconds(5400 + added);
+      setTotalStudySeconds(added);
     });
 
     // 2. Subscribe to live gamification updates
@@ -53,15 +53,15 @@ export function DashboardPage() {
       setCompletedLessonCount(set.size);
       getStudySessions().then((sessions) => {
         const added = (sessions || []).reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
-        setTotalStudySeconds(5400 + added);
+        setTotalStudySeconds(added);
       });
     });
 
     return () => unsubscribe();
   }, []);
 
-  const xp = liveProfile?.total_xp ?? authProfile?.xp ?? 450;
-  const streak = liveProfile?.streak_days ?? authProfile?.current_streak ?? 5;
+  const xp = liveProfile?.total_xp ?? authProfile?.xp ?? 0;
+  const streak = liveProfile?.streak_days ?? authProfile?.current_streak ?? 0;
   const levelData = calculateLevel(xp);
   const level = levelData.level;
   const levelProgress = levelData.progressPercent;
@@ -80,11 +80,19 @@ export function DashboardPage() {
               <span className="text-xs text-slate-400">NexHack Active Session</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-              Keep the streak going, {liveProfile?.full_name || liveProfile?.username || 'Learner'}!
+              Keep the streak going, {liveProfile?.full_name || liveProfile?.username || authProfile?.display_name || authProfile?.username || 'Learner'}!
             </h1>
             <p className="text-sm text-slate-300 max-w-xl leading-relaxed">
-              You are currently on a <span className="text-orange-400 font-semibold">{streak}-day learning streak</span>.
-              Log a study session or finish a video lesson today to protect your rank.
+              {streak > 0 ? (
+                <>
+                  You are currently on a <span className="text-orange-400 font-semibold">{streak}-day learning streak</span>.
+                  Log a study session or finish a video lesson today to protect your rank.
+                </>
+              ) : (
+                <>
+                  Welcome to NexHack! Complete your first video lesson or start a focus timer sprint today to kickstart your study streak and rank up.
+                </>
+              )}
             </p>
           </div>
 
@@ -152,7 +160,9 @@ export function DashboardPage() {
           </div>
           <div>
             <div className="text-2xl font-bold text-white tracking-tight">{streak} Days</div>
-            <p className="text-[11px] text-orange-400/90 mt-0.5">Active today • Streak protected</p>
+            <p className="text-[11px] text-orange-400/90 mt-0.5">
+              {streak > 0 ? 'Active today • Streak protected' : 'Complete a lesson or timer to begin'}
+            </p>
           </div>
         </div>
 
@@ -166,7 +176,9 @@ export function DashboardPage() {
           </div>
           <div>
             <div className="text-2xl font-bold text-white tracking-tight">{studyHours} hrs</div>
-            <p className="text-[11px] text-slate-400 mt-0.5">Clocked via study timer</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              {totalStudySeconds > 0 ? 'Clocked via study timer' : 'No study sessions logged yet'}
+            </p>
           </div>
         </div>
 
@@ -180,7 +192,9 @@ export function DashboardPage() {
           </div>
           <div>
             <div className="text-2xl font-bold text-white tracking-tight">{completedLessonCount}</div>
-            <p className="text-[11px] text-emerald-400/90 mt-0.5">Across enrolled courses</p>
+            <p className="text-[11px] text-emerald-400/90 mt-0.5">
+              {completedLessonCount > 0 ? 'Across enrolled courses' : 'Finish your first lesson for XP'}
+            </p>
           </div>
         </div>
       </div>
@@ -203,60 +217,81 @@ export function DashboardPage() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {courses.slice(0, 4).map((course) => (
-              <div
-                key={course.id}
-                className="group rounded-3xl bg-slate-900/80 border border-slate-800 overflow-hidden hover:border-slate-700 transition-all flex flex-col justify-between shadow-md"
-              >
-                <div className="relative aspect-video w-full overflow-hidden bg-slate-800">
-                  <img
-                    src={course.thumbnail_url}
-                    alt={course.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
-                  <span className="absolute bottom-2 left-2 text-[11px] font-medium px-2 py-0.5 rounded bg-black/60 text-slate-200 backdrop-blur-sm">
-                    {course.channel_title}
-                  </span>
-                </div>
-
-                <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
-                  <div>
-                    <h3 className="font-semibold text-sm text-white line-clamp-1 group-hover:text-brand-300 transition-colors">
-                      {course.title}
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-                      {course.description}
-                    </p>
-                  </div>
-
-                  <div className="space-y-2 pt-2 border-t border-slate-800/80">
-                    <div className="flex justify-between text-xs text-slate-400">
-                      <span>Progress</span>
-                      <span className="font-semibold text-slate-200">
-                        {course.completed_lessons_count || 0}/{course.total_lessons || 0} lessons ({course.progress_percent || 0}%)
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                      <div
-                        className="bg-brand-500 h-1.5 rounded-full transition-all duration-300"
-                        style={{ width: `${course.progress_percent || 0}%` }}
-                      />
-                    </div>
-
-                    <Link
-                      to={`/courses/${course.id}`}
-                      className="mt-2 w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-800 hover:bg-brand-600 hover:text-white text-slate-200 text-xs font-semibold transition-all"
-                    >
-                      <Play className="w-3.5 h-3.5 fill-current" />
-                      <span>Continue Studying</span>
-                    </Link>
-                  </div>
-                </div>
+          {courses.length === 0 ? (
+            <div className="p-8 sm:p-12 text-center rounded-3xl bg-slate-900/60 border border-slate-800 space-y-4 shadow-md">
+              <div className="w-14 h-14 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center mx-auto">
+                <BookOpen className="w-7 h-7" />
               </div>
-            ))}
-          </div>
+              <div className="max-w-md mx-auto">
+                <h3 className="text-base sm:text-lg font-bold text-white">No Enrolled Courses Yet</h3>
+                <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                  Transform any public YouTube playlist or video into an interactive, trackable course with automatic XP rewards and progress verification.
+                </p>
+              </div>
+              <Link
+                to="/courses"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold shadow-lg shadow-brand-500/20 transition-all"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>Import Your First Course</span>
+              </Link>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {courses.slice(0, 4).map((course) => (
+                <div
+                  key={course.id}
+                  className="group rounded-3xl bg-slate-900/80 border border-slate-800 overflow-hidden hover:border-slate-700 transition-all flex flex-col justify-between shadow-md"
+                >
+                  <div className="relative aspect-video w-full overflow-hidden bg-slate-800">
+                    <img
+                      src={course.thumbnail_url}
+                      alt={course.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
+                    <span className="absolute bottom-2 left-2 text-[11px] font-medium px-2 py-0.5 rounded bg-black/60 text-slate-200 backdrop-blur-sm">
+                      {course.channel_title}
+                    </span>
+                  </div>
+
+                  <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+                    <div>
+                      <h3 className="font-semibold text-sm text-white line-clamp-1 group-hover:text-brand-300 transition-colors">
+                        {course.title}
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                        {course.description}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2 pt-2 border-t border-slate-800/80">
+                      <div className="flex justify-between text-xs text-slate-400">
+                        <span>Progress</span>
+                        <span className="font-semibold text-slate-200">
+                          {course.completed_lessons_count || 0}/{course.total_lessons || 0} lessons ({course.progress_percent || 0}%)
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className="bg-brand-500 h-1.5 rounded-full transition-all duration-300"
+                          style={{ width: `${course.progress_percent || 0}%` }}
+                        />
+                      </div>
+
+                      <Link
+                        to={`/courses/${course.id}`}
+                        className="mt-2 w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-800 hover:bg-brand-600 hover:text-white text-slate-200 text-xs font-semibold transition-all"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Continue Studying</span>
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Milestones & Badges Sidebar (1 Col) */}

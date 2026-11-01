@@ -434,42 +434,73 @@ export async function fetchSingleVideoCourse(videoId, category = 'General') {
   let title = `YouTube Lecture (${videoId})`;
   let author = 'YouTube Creator';
   let thumbnail = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+  let description = '';
+  let durationSeconds = 1800;
 
-  const isBrowser = typeof window !== 'undefined';
-  const targetUrl = isBrowser
-    ? `/api/youtube-oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
-    : `https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`;
-
-  try {
-    const res = await fetch(targetUrl);
-    if (res.ok) {
-      const data = await res.json();
-      if (data.title) title = data.title;
-      if (data.author_name) author = data.author_name;
-      if (data.thumbnail_url) thumbnail = data.thumbnail_url;
+  const apiKey = getYouTubeApiKey();
+  if (apiKey) {
+    try {
+      const vRes = await fetch(
+        `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${apiKey}`
+      );
+      if (vRes.ok) {
+        const vData = await vRes.json();
+        const item = vData.items?.[0];
+        if (item) {
+          title = item.snippet?.title || title;
+          author = item.snippet?.channelTitle || author;
+          description = item.snippet?.description || '';
+          thumbnail =
+            item.snippet?.thumbnails?.high?.url ||
+            item.snippet?.thumbnails?.medium?.url ||
+            thumbnail;
+          if (item.contentDetails?.duration) {
+            durationSeconds = parseIsoDuration(item.contentDetails.duration);
+          }
+        }
+      }
+    } catch {
+      // fallback
     }
-  } catch {
-    // fallback
+  }
+
+  if (title.startsWith('YouTube Lecture')) {
+    const isBrowser = typeof window !== 'undefined';
+    const targetUrl = isBrowser
+      ? `/api/youtube-oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
+      : `https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`;
+
+    try {
+      const res = await fetch(targetUrl);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.title) title = data.title;
+        if (data.author_name) author = data.author_name;
+        if (data.thumbnail_url) thumbnail = data.thumbnail_url;
+      }
+    } catch {
+      // fallback
+    }
   }
 
   const lesson = {
     youtube_video_id: videoId,
     title,
-    description: `Complete lecture by ${author}`,
+    description: description || `Complete lecture by ${author}`,
     position: 1,
-    duration_seconds: 1800,
+    duration_seconds: durationSeconds,
     thumbnail_url: thumbnail,
   };
 
   return {
     youtube_playlist_id: `single-${videoId}`,
     title,
-    description: `Imported video course by ${author}`,
+    description: description || `Imported video course by ${author}`,
     thumbnail_url: thumbnail,
     channel_title: author,
     category: category || 'Web Development',
     total_lessons: 1,
-    total_duration_seconds: 1800,
+    total_duration_seconds: durationSeconds,
     lessons: [lesson],
   };
 }

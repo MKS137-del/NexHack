@@ -122,27 +122,31 @@ export function CoursesPage() {
           ))}
         </div>
       ) : filteredCourses.length === 0 ? (
-        <div className="p-12 text-center rounded-2xl bg-slate-900/40 border border-slate-800/80 space-y-4">
-          <Layers className="w-10 h-10 text-slate-600 mx-auto" />
-          <div>
-            <h3 className="text-base font-semibold text-white">No courses match your query</h3>
-            <p className="text-xs text-slate-400 mt-1">
-              Import any YouTube playlist link to start learning right away
+        <div className="p-12 text-center rounded-3xl bg-slate-900/40 border border-slate-800/80 space-y-4 shadow-sm">
+          <Layers className="w-12 h-12 text-slate-600 mx-auto" />
+          <div className="max-w-md mx-auto">
+            <h3 className="text-base sm:text-lg font-bold text-white">
+              {courses.length === 0 ? "You Haven't Imported Any Courses Yet" : "No Courses Match Your Query"}
+            </h3>
+            <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+              {courses.length === 0
+                ? "Paste any public YouTube playlist or video link to create a structured curriculum with verified progress and XP tracking."
+                : "Try adjusting your search terms or category filter to discover imported courses."}
             </p>
           </div>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-medium text-white transition-colors"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-xs font-semibold text-white transition-all shadow-md shadow-brand-500/20"
           >
             <Plus className="w-4 h-4" />
-            <span>Import Now</span>
+            <span>Import YouTube Playlist</span>
           </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredCourses.map((course) => {
-            const hours = Math.floor((course.total_duration_seconds || 7200) / 3600);
-            const minutes = Math.floor(((course.total_duration_seconds || 7200) % 3600) / 60);
+            const hours = Math.floor((course.total_duration_seconds || 0) / 3600);
+            const minutes = Math.floor(((course.total_duration_seconds || 0) % 3600) / 60);
 
             return (
               <div

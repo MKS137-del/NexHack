@@ -14,7 +14,6 @@ import {
   Check,
   X,
   History,
-  RotateCcw,
 } from 'lucide-react';
 import {
   getLocalProfile,
@@ -25,20 +24,27 @@ import {
   subscribeToGamification,
 } from '../../gamification/gamificationService';
 import { getCompletedLessonIds } from '../../courses/courseService';
-import { INITIAL_COURSES } from '../../../lib/mockData';
+import { getStudySessions } from '../../timer/timerService';
+import { getGroups } from '../../groups/groupService';
+import { supabase, isSupabaseConfigured } from '../../../lib/supabase';
 
 export function ProfilePage() {
+  const { user, profile: authProfile } = useAuth();
   const [profile, setProfile] = useState(() => getLocalProfile());
   const [achievements, setAchievements] = useState(() => getAllAchievementsWithStatus());
   const [xpTransactions, setXpTransactions] = useState(() => getXPTransactions());
-  const [completedLessonCount, setCompletedLessonCount] = useState(1);
+  const [completedLessonCount, setCompletedLessonCount] = useState(0);
+  const [totalStudySeconds, setTotalStudySeconds] = useState(0);
+  const [cohortCount, setCohortCount] = useState(0);
+
+  const displayName = profile.full_name || authProfile?.display_name || authProfile?.username || user?.email?.split('@')[0] || 'Learner';
+  const username = profile.username || authProfile?.username || user?.email?.split('@')[0] || 'learner';
+  const bio = profile.bio || 'Dedicated self-directed developer tracking verified knowledge milestones on NexHack.';
 
   // Edit Profile Modal
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editName, setEditName] = useState(profile.full_name || 'Alex Rivera');
-  const [editBio, setEditBio] = useState(
-    profile.bio || 'Dedicated self-directed developer mastering modern systems architecture and React.'
-  );
+  const [editName, setEditName] = useState(displayName);
+  const [editBio, setEditBio] = useState(bio);
 
   const [notification, setNotification] = useState(null);
 
@@ -49,6 +55,16 @@ export function ProfilePage() {
     setXpTransactions(getXPTransactions());
     const completedSet = getCompletedLessonIds();
     setCompletedLessonCount(completedSet.size);
+
+    getStudySessions().then((sessions) => {
+      const added = (sessions || []).reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
+      setTotalStudySeconds(added);
+    });
+
+    getGroups().then((groups) => {
+      const joined = (groups || []).filter((g) => g.is_member);
+      setCohortCount(joined.length);
+    });
   };
 
   useEffect(() => {
@@ -68,29 +84,25 @@ export function ProfilePage() {
     };
     saveLocalProfile(updated);
     setProfile(updated);
+
+    if (isSupabaseConfigured && supabase && profile.id) {
+      supabase
+        .from('profiles')
+        .update({
+          display_name: editName.trim(),
+          bio: editBio.trim(),
+        })
+        .eq('id', profile.id)
+        .then();
+    }
+
     setIsEditOpen(false);
     setNotification('Profile details updated successfully!');
     setTimeout(() => setNotification(null), 4000);
   };
 
-  const handleResetData = () => {
-    if (window.confirm('Reset local demo data to default clean state? This will clear temporary imports and reload seed courses.')) {
-      try {
-        localStorage.removeItem('nexhack_courses');
-        localStorage.removeItem('nexhack_completed_lessons');
-        localStorage.removeItem('nexhack_study_sessions');
-        localStorage.removeItem('nexhack_active_timer');
-        localStorage.removeItem('nexhack_user_achievements');
-        localStorage.removeItem('nexhack_xp_transactions');
-        localStorage.removeItem('nexhack_mock_user');
-      } catch {
-        // ignore
-      }
-      window.location.reload();
-    }
-  };
-
-  const levelInfo = calculateLevel(profile.total_xp || 450);
+  const levelInfo = calculateLevel(profile.total_xp || 0);
+  const studyHours = (totalStudySeconds / 3600).toFixed(1);
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fade-in py-2">
@@ -122,17 +134,17 @@ export function ProfilePage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-                {profile.full_name || 'Alex Rivera'}
+                {displayName}
               </h1>
               <p className="text-xs text-slate-400 mt-0.5">
-                @{profile.username || 'alex_dev'} • Member of 1 Study Cohort
+                @{username} • {cohortCount === 1 ? 'Member of 1 Study Cohort' : `Member of ${cohortCount} Study Cohorts`}
               </p>
             </div>
 
             <div className="flex items-center gap-2 justify-center sm:justify-start">
               <button
                 onClick={() => {
-                  setEditName(profile.full_name || 'Alex Rivera');
+                  setEditName(displayName);
                   setEditBio(profile.bio || '');
                   setIsEditOpen(true);
                 }}
@@ -145,8 +157,7 @@ export function ProfilePage() {
           </div>
 
           <p className="text-xs text-slate-300 leading-relaxed max-w-xl">
-            {profile.bio ||
-              'Dedicated self-directed developer mastering modern systems architecture and React.'}
+            {bio}
           </p>
 
           {/* Level Progress Slider */}
@@ -154,7 +165,7 @@ export function ProfilePage() {
             <div className="flex justify-between text-[11px] text-slate-400 mb-1">
               <span className="font-semibold text-brand-300">Level {levelInfo.level} Progress</span>
               <span>
-                {profile.total_xp} / {levelInfo.nextLevelFloorXP} XP ({levelInfo.progressPercent}%)
+                {profile.total_xp || 0} / {levelInfo.nextLevelFloorXP} XP ({levelInfo.progressPercent}%)
               </span>
             </div>
             <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
@@ -173,7 +184,7 @@ export function ProfilePage() {
           <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 w-fit mx-auto">
             <Sparkles className="w-4 h-4" />
           </div>
-          <div className="text-2xl font-bold text-white mt-1">{(profile.total_xp || 450).toLocaleString()}</div>
+          <div className="text-2xl font-bold text-white mt-1">{(profile.total_xp || 0).toLocaleString()}</div>
           <p className="text-[11px] text-slate-400">Total XP</p>
         </div>
 
@@ -181,7 +192,7 @@ export function ProfilePage() {
           <div className="p-2 rounded-xl bg-orange-500/10 text-orange-400 w-fit mx-auto">
             <Flame className="w-4 h-4 fill-orange-500/20" />
           </div>
-          <div className="text-2xl font-bold text-white mt-1">{profile.streak_days || 5} Days</div>
+          <div className="text-2xl font-bold text-white mt-1">{profile.streak_days || 0} Days</div>
           <p className="text-[11px] text-slate-400">Current Streak</p>
         </div>
 
@@ -189,7 +200,7 @@ export function ProfilePage() {
           <div className="p-2 rounded-xl bg-brand-500/10 text-brand-400 w-fit mx-auto">
             <Clock className="w-4 h-4" />
           </div>
-          <div className="text-2xl font-bold text-white mt-1">14.2 hrs</div>
+          <div className="text-2xl font-bold text-white mt-1">{studyHours} hrs</div>
           <p className="text-[11px] text-slate-400">Study Clocked</p>
         </div>
 
@@ -272,33 +283,27 @@ export function ProfilePage() {
           </span>
         </div>
 
-        <div className="divide-y divide-slate-800 max-h-56 overflow-y-auto pr-1">
-          {xpTransactions.slice(0, 8).map((tx) => (
-            <div key={tx.id} className="py-2.5 flex items-center justify-between text-xs gap-3">
-              <div className="min-w-0">
-                <p className="font-medium text-slate-200 truncate">{tx.description}</p>
-                <p className="text-[10px] text-slate-500">
-                  {new Date(tx.created_at).toLocaleString()} • Source: {tx.source}
-                </p>
+        {xpTransactions.length === 0 ? (
+          <div className="py-8 text-center text-xs text-slate-500">
+            No transactions in ledger yet. Complete lessons or study sprints to generate tamper-proof XP records.
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-800 max-h-56 overflow-y-auto pr-1">
+            {xpTransactions.slice(0, 8).map((tx) => (
+              <div key={tx.id} className="py-2.5 flex items-center justify-between text-xs gap-3">
+                <div className="min-w-0">
+                  <p className="font-medium text-slate-200 truncate">{tx.description}</p>
+                  <p className="text-[10px] text-slate-500">
+                    {new Date(tx.created_at).toLocaleString()} • Source: {tx.source}
+                  </p>
+                </div>
+                <span className="font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded text-xs shrink-0">
+                  +{tx.amount} XP
+                </span>
               </div>
-              <span className="font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded text-xs shrink-0">
-                +{tx.amount} XP
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Evaluator Reset Bar */}
-      <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-xs">
-        <span className="text-slate-400">Hackathon Evaluator Tools</span>
-        <button
-          onClick={handleResetData}
-          className="flex items-center gap-1.5 text-xs text-rose-400 hover:text-rose-300 font-semibold"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>Reset Demo Storage to Seed</span>
-        </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Edit Profile Modal */}

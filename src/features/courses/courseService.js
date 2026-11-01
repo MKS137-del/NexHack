@@ -1,72 +1,144 @@
 /**
  * Course Management Service
  * Handles course listings, playlist imports, lesson syllabus, and completion tracking.
+ * Provides user-scoped persistence and data isolation.
  */
 
 import { supabase, isSupabaseConfigured } from '../../lib/supabase.js';
-import { INITIAL_COURSES } from '../../lib/mockData.js';
 import { fetchPlaylistData } from './youtubeService.js';
 import { awardXP } from '../gamification/gamificationService.js';
 
-const COURSES_STORAGE_KEY = 'nexhack_courses';
-const COMPLETED_LESSONS_STORAGE_KEY = 'nexhack_completed_lessons';
+/**
+ * Returns current authenticated user ID for data isolation
+ */
+function generateUuid() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function getActiveUserId() {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      // Prioritize active Supabase token if Supabase is connected
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+          const sbRaw = localStorage.getItem(key);
+          if (sbRaw) {
+            const sbParsed = JSON.parse(sbRaw);
+            if (sbParsed?.user?.id) return sbParsed.user.id;
+          }
+        }
+      }
+      const raw = localStorage.getItem('nexhack_auth_session');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.user?.id) return parsed.user.id;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function getCoursesStorageKey(userId) {
+  const uid = userId || getActiveUserId();
+  return uid ? `nexhack_${uid}_courses` : 'nexhack_courses';
+}
+
+function getCompletedLessonsStorageKey(userId) {
+  const uid = userId || getActiveUserId();
+  return uid ? `nexhack_${uid}_completed_lessons` : 'nexhack_completed_lessons';
+}
 
 /**
- * Returns set of completed lesson IDs
+ * Returns set of completed lesson IDs for active user
  */
-export function getCompletedLessonIds() {
+export function getCompletedLessonIds(userId = null) {
   try {
-    const raw = localStorage.getItem(COMPLETED_LESSONS_STORAGE_KEY);
-    return raw ? new Set(JSON.parse(raw)) : new Set(['l-101']);
+    const raw = localStorage.getItem(getCompletedLessonsStorageKey(userId));
+    return raw ? new Set(JSON.parse(raw)) : new Set();
   } catch {
-    return new Set(['l-101']);
+    return new Set();
   }
 }
 
 /**
- * Saves completed lesson IDs set
+ * Saves completed lesson IDs set for active user
  */
-function saveCompletedLessonIds(set) {
+function saveCompletedLessonIds(set, userId = null) {
   try {
-    localStorage.setItem(COMPLETED_LESSONS_STORAGE_KEY, JSON.stringify(Array.from(set)));
+    localStorage.setItem(
+      getCompletedLessonsStorageKey(userId),
+      JSON.stringify(Array.from(set))
+    );
   } catch (err) {
     console.error('Failed to save completed lessons:', err);
   }
 }
 
 /**
- * Retrieves all courses, calculating completion percentages
+ * Retrieves all courses for the active user, calculating completion percentages
  */
-export async function getCourses() {
+export async function getCourses(userId = null) {
   let coursesList = [];
+  const uid = userId || getActiveUserId();
 
   // Try Supabase first if configured
   if (isSupabaseConfigured && supabase) {
     try {
-      const { data, error } = await supabase
-        .from('courses')
-        .select('*, lessons(*)')
-        .order('created_at', { ascending: false });
+      const { data: { user } } = await supabase.auth.getUser();
+      const currentUid = uid || user?.id;
 
-      if (!error && data && data.length > 0) {
-        coursesList = data;
+      if (currentUid) {
+        // Query user's enrolled courses
+        const { data: enrollments, error: enrollErr } = await supabase
+          .from('enrollments')
+          .select('course_id, courses(*, lessons(*))')
+          .eq('user_id', currentUid);
+
+        if (!enrollErr && enrollments && enrollments.length > 0) {
+          coursesList = enrollments
+            .map((e) => e.courses)
+            .filter(Boolean);
+        } else {
+          // If no enrollments, check courses created by user
+          const { data: createdCourses, error: courseErr } = await supabase
+            .from('courses')
+            .select('*, lessons(*)')
+            .eq('created_by', currentUid)
+            .order('created_at', { ascending: false });
+
+          if (!courseErr && createdCourses && createdCourses.length > 0) {
+            coursesList = createdCourses;
+          }
+        }
       }
     } catch {
-      // fallback to local
+      // fallback to user-isolated storage
     }
   }
 
-  // Fallback to local storage or initial seed
+  // Fallback to local storage for current user
   if (coursesList.length === 0) {
     try {
-      const raw = localStorage.getItem(COURSES_STORAGE_KEY);
-      coursesList = raw ? JSON.parse(raw) : INITIAL_COURSES;
+      const raw = localStorage.getItem(getCoursesStorageKey(uid));
+      coursesList = raw ? JSON.parse(raw) : [];
     } catch {
-      coursesList = INITIAL_COURSES;
+      coursesList = [];
     }
   }
 
-  const completedSet = getCompletedLessonIds();
+  const completedSet = getCompletedLessonIds(uid);
 
   // Enrich with live calculation
   return coursesList.map((course) => {
@@ -88,12 +160,12 @@ export async function getCourses() {
 /**
  * Retrieves a single course by ID with its lessons
  */
-export async function getCourseById(courseId) {
-  const allCourses = await getCourses();
-  const course = allCourses.find((c) => c.id === courseId) || allCourses[0];
+export async function getCourseById(courseId, userId = null) {
+  const allCourses = await getCourses(userId);
+  const course = allCourses.find((c) => c.id === courseId);
   if (!course) return null;
 
-  const completedSet = getCompletedLessonIds();
+  const completedSet = getCompletedLessonIds(userId);
   const enrichedLessons = (course.lessons || []).map((lesson) => ({
     ...lesson,
     is_completed: completedSet.has(lesson.id),
@@ -116,17 +188,18 @@ export async function getCourseById(courseId) {
 /**
  * Imports a YouTube playlist as a new course
  */
-export async function importPlaylistCourse(playlistUrl, category = 'General', customTitle = null) {
+export async function importPlaylistCourse(playlistUrl, category = 'General', customTitle = null, userId = null) {
+  const uid = userId || getActiveUserId();
   const playlistData = await fetchPlaylistData(playlistUrl, category);
 
-  const newCourseId = `course-${Date.now()}`;
+  const newCourseId = generateUuid();
   const lessons = playlistData.lessons.map((lesson, idx) => ({
-    id: `lesson-${Date.now()}-${idx + 1}`,
+    id: generateUuid(),
     course_id: newCourseId,
     youtube_video_id: lesson.youtube_video_id,
     title: lesson.title,
     description: lesson.description || '',
-    duration_seconds: lesson.duration_seconds,
+    duration_seconds: lesson.duration_seconds || 1200,
     position: idx + 1,
     thumbnail_url: lesson.thumbnail_url,
   }));
@@ -141,16 +214,17 @@ export async function importPlaylistCourse(playlistUrl, category = 'General', cu
     category: category || playlistData.category,
     total_lessons: lessons.length,
     total_duration_seconds: playlistData.total_duration_seconds,
+    created_by: uid,
     created_at: new Date().toISOString(),
     lessons,
   };
 
-  // Save to localStorage
+  // Save to user-scoped storage
   try {
-    const raw = localStorage.getItem(COURSES_STORAGE_KEY);
-    const existing = raw ? JSON.parse(raw) : INITIAL_COURSES;
+    const raw = localStorage.getItem(getCoursesStorageKey(uid));
+    const existing = raw ? JSON.parse(raw) : [];
     const updated = [newCourse, ...existing];
-    localStorage.setItem(COURSES_STORAGE_KEY, JSON.stringify(updated));
+    localStorage.setItem(getCoursesStorageKey(uid), JSON.stringify(updated));
   } catch (err) {
     console.error('Failed to store new course in localStorage:', err);
   }
@@ -158,9 +232,13 @@ export async function importPlaylistCourse(playlistUrl, category = 'General', cu
   // Attempt Supabase insert if available
   if (isSupabaseConfigured && supabase) {
     try {
+      const user = (await supabase.auth.getUser()).data?.user;
+      const effectiveUid = uid || user?.id;
+
       const { data: userCourse, error: courseErr } = await supabase
         .from('courses')
         .insert({
+          id: newCourse.id,
           youtube_playlist_id: newCourse.youtube_playlist_id,
           title: newCourse.title,
           description: newCourse.description,
@@ -169,12 +247,23 @@ export async function importPlaylistCourse(playlistUrl, category = 'General', cu
           category: newCourse.category,
           total_lessons: newCourse.total_lessons,
           total_duration_seconds: newCourse.total_duration_seconds,
+          created_by: effectiveUid,
         })
         .select()
         .single();
 
       if (!courseErr && userCourse) {
+        // Enroll current user in newly imported course
+        if (effectiveUid) {
+          await supabase.from('enrollments').upsert({
+            user_id: effectiveUid,
+            course_id: userCourse.id,
+            enrolled_at: new Date().toISOString(),
+          });
+        }
+
         const dbLessons = lessons.map((l) => ({
+          id: l.id,
           course_id: userCourse.id,
           youtube_video_id: l.youtube_video_id,
           title: l.title,
@@ -185,7 +274,7 @@ export async function importPlaylistCourse(playlistUrl, category = 'General', cu
         await supabase.from('lessons').insert(dbLessons);
       }
     } catch (err) {
-      console.warn('Supabase course persistence error:', err);
+      console.warn('Supabase course persistence notice:', err);
     }
   }
 
@@ -195,8 +284,9 @@ export async function importPlaylistCourse(playlistUrl, category = 'General', cu
 /**
  * Toggles lesson completion status with strict XP deduplication
  */
-export async function toggleLessonCompletion(courseId, lessonId, lessonTitle = 'Lesson') {
-  const completedSet = getCompletedLessonIds();
+export async function toggleLessonCompletion(courseId, lessonId, lessonTitle = 'Lesson', userId = null) {
+  const uid = userId || getActiveUserId();
+  const completedSet = getCompletedLessonIds(uid);
   const wasCompleted = completedSet.has(lessonId);
 
   let awardedResult = null;
@@ -204,7 +294,7 @@ export async function toggleLessonCompletion(courseId, lessonId, lessonTitle = '
   if (!wasCompleted) {
     // Mark as completed
     completedSet.add(lessonId);
-    saveCompletedLessonIds(completedSet);
+    saveCompletedLessonIds(completedSet, uid);
 
     // Award 50 XP with deduplication
     awardedResult = await awardXP({
@@ -212,34 +302,35 @@ export async function toggleLessonCompletion(courseId, lessonId, lessonTitle = '
       source: 'lesson_complete',
       referenceId: lessonId,
       description: `Completed lesson: ${lessonTitle}`,
+      userId: uid,
     });
   } else {
     // Toggle off
     completedSet.delete(lessonId);
-    saveCompletedLessonIds(completedSet);
+    saveCompletedLessonIds(completedSet, uid);
   }
 
   // Sync with Supabase if online
   if (isSupabaseConfigured && supabase) {
     try {
       const user = (await supabase.auth.getUser()).data?.user;
-      if (user) {
+      const effectiveUid = uid || user?.id;
+      if (effectiveUid && UUID_REGEX.test(lessonId)) {
         if (!wasCompleted) {
           await supabase.from('lesson_completions').upsert({
-            user_id: user.id,
+            user_id: effectiveUid,
             lesson_id: lessonId,
-            course_id: courseId,
             completed_at: new Date().toISOString(),
           });
         } else {
           await supabase
             .from('lesson_completions')
             .delete()
-            .match({ user_id: user.id, lesson_id: lessonId });
+            .match({ user_id: effectiveUid, lesson_id: lessonId });
         }
       }
     } catch (err) {
-      console.warn('Supabase lesson completion sync deferred:', err);
+      console.warn('Supabase lesson completion sync notice:', err);
     }
   }
 
