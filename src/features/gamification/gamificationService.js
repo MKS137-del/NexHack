@@ -336,9 +336,13 @@ export function getAllAchievementsWithStatus() {
     unlocked = ['first_step'];
   }
 
-  return INITIAL_ACHIEVEMENTS.map((badge) => ({
-    ...badge,
-    is_unlocked: unlocked.includes(badge.code),
-    unlocked_at: unlocked.includes(badge.code) ? 'Recently Unlocked' : null,
-  }));
+  return INITIAL_ACHIEVEMENTS.map((badge) => {
+    const code = badge.code || badge.id;
+    return {
+      ...badge,
+      code,
+      is_unlocked: unlocked.includes(code),
+      unlocked_at: unlocked.includes(code) ? 'Recently Unlocked' : null,
+    };
+  });
 }
