@@ -7,19 +7,36 @@
 import { supabase, isSupabaseConfigured } from '../../lib/supabase.js';
 import { INITIAL_ACHIEVEMENTS } from '../../lib/mockData.js';
 
+const memoryStore = new Map();
 const safeStorage = {
   getItem: (key) => {
     try {
-      return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+      if (typeof localStorage !== 'undefined') {
+        return localStorage.getItem(key);
+      }
+      return memoryStore.get(key) || null;
     } catch {
-      return null;
+      return memoryStore.get(key) || null;
     }
   },
   setItem: (key, val) => {
     try {
-      if (typeof localStorage !== 'undefined') localStorage.setItem(key, val);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(key, val);
+      }
+      memoryStore.set(key, String(val));
     } catch {
-      // ignore
+      memoryStore.set(key, String(val));
+    }
+  },
+  removeItem: (key) => {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem(key);
+      }
+      memoryStore.delete(key);
+    } catch {
+      memoryStore.delete(key);
     }
   },
 };
