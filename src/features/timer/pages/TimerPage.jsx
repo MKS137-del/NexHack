@@ -14,6 +14,7 @@ import {
   Layers,
   History,
   Check,
+  Timer as TimerIcon,
 } from 'lucide-react';
 import { getCourses } from '../../courses/courseService';
 import {
@@ -36,7 +37,8 @@ export function TimerPage() {
 
   const [courses, setCourses] = useState([]);
   const [selectedCourseId, setSelectedCourseId] = useState(preselectedCourseId || '');
-  const [mode, setMode] = useState('pomodoro'); // 'pomodoro' | 'shortBreak' | 'longBreak' | 'manual'
+  const [mode, setMode] = useState('pomodoro'); // 'pomodoro' | 'timer' | 'shortBreak' | 'longBreak' | 'manual'
+  const [customMinutes, setCustomMinutes] = useState(30); // Default normal timer duration in minutes
   const [isRunning, setIsRunning] = useState(false);
   const [secondsElapsed, setSecondsElapsed] = useState(0); // For manual or active focus
   const [secondsRemaining, setSecondsRemaining] = useState(POMODORO_DURATIONS.pomodoro);
@@ -66,15 +68,22 @@ export function TimerPage() {
     if (saved && saved.isRunning) {
       const now = Date.now();
       const elapsedSinceStart = Math.floor((now - new Date(saved.startedAt).getTime()) / 1000);
-      setMode(saved.mode || 'pomodoro');
+      const restoredMode = saved.mode || 'pomodoro';
+      setMode(restoredMode);
       setSelectedCourseId(saved.courseId || '');
       setStartTime(saved.startedAt);
       setIsRunning(true);
 
-      if (saved.mode === 'manual') {
+      if (restoredMode === 'manual') {
         setSecondsElapsed(elapsedSinceStart);
+      } else if (restoredMode === 'timer') {
+        const mins = saved.customMinutes || 30;
+        setCustomMinutes(mins);
+        const totalTarget = mins * 60;
+        const remaining = Math.max(0, totalTarget - elapsedSinceStart);
+        setSecondsRemaining(remaining);
       } else {
-        const totalTarget = POMODORO_DURATIONS[saved.mode] || 25 * 60;
+        const totalTarget = POMODORO_DURATIONS[restoredMode] || 25 * 60;
         const remaining = Math.max(0, totalTarget - elapsedSinceStart);
         setSecondsRemaining(remaining);
       }
@@ -116,13 +125,24 @@ export function TimerPage() {
     };
   }, [isRunning, mode]);
 
-  // Handle auto-finish when Pomodoro hits 0
+  // Handle auto-finish when countdown timer hits 0
   const handleTimerFinished = async () => {
     setIsRunning(false);
     if (timerRef.current) clearInterval(timerRef.current);
 
-    if (mode === 'pomodoro') {
-      await logCurrentSession(true);
+    if (mode === 'pomodoro' || mode === 'timer') {
+      await logCurrentSession(mode === 'pomodoro');
+    }
+  };
+
+  const handleCustomMinutesChange = (newMins) => {
+    if (isRunning) return;
+    const clamped = Math.max(1, Math.min(240, Number(newMins) || 1));
+    setCustomMinutes(clamped);
+    if (mode === 'timer') {
+      setSecondsRemaining(clamped * 60);
+      setSecondsElapsed(0);
+      setStartTime(null);
     }
   };
 
@@ -135,6 +155,7 @@ export function TimerPage() {
     persistActiveTimerState({
       isRunning: true,
       mode,
+      customMinutes,
       courseId: selectedCourseId,
       startedAt: startTime || now,
     });
@@ -145,6 +166,7 @@ export function TimerPage() {
     persistActiveTimerState({
       isRunning: false,
       mode,
+      customMinutes,
       courseId: selectedCourseId,
       startedAt: startTime,
     });
@@ -155,7 +177,13 @@ export function TimerPage() {
     clearActiveTimerState();
     setStartTime(null);
     setSecondsElapsed(0);
-    setSecondsRemaining(POMODORO_DURATIONS[mode] || 25 * 60);
+    if (mode === 'timer') {
+      setSecondsRemaining(customMinutes * 60);
+    } else if (mode === 'manual') {
+      setSecondsRemaining(0);
+    } else {
+      setSecondsRemaining(POMODORO_DURATIONS[mode] || 25 * 60);
+    }
   };
 
   const handleModeChange = (newMode) => {
@@ -164,7 +192,13 @@ export function TimerPage() {
     setStartTime(null);
     setSecondsElapsed(0);
     setMode(newMode);
-    setSecondsRemaining(POMODORO_DURATIONS[newMode] || 0);
+    if (newMode === 'timer') {
+      setSecondsRemaining(customMinutes * 60);
+    } else if (newMode === 'manual') {
+      setSecondsRemaining(0);
+    } else {
+      setSecondsRemaining(POMODORO_DURATIONS[newMode] || 0);
+    }
   };
 
   const logCurrentSession = async (isPomodoroComplete = false) => {
@@ -173,7 +207,12 @@ export function TimerPage() {
     const effectiveStart = startTime || new Date(Date.now() - secondsElapsed * 1000).toISOString();
     const effectiveEnd = new Date().toISOString();
 
-    const duration = mode === 'manual' ? secondsElapsed : POMODORO_DURATIONS[mode] - secondsRemaining;
+    const duration =
+      mode === 'manual'
+        ? secondsElapsed
+        : mode === 'timer'
+        ? (customMinutes * 60) - secondsRemaining
+        : POMODORO_DURATIONS[mode] - secondsRemaining;
 
     const result = await verifyAndSaveSession({
       courseId: selectedCourseId || null,
@@ -199,14 +238,21 @@ export function TimerPage() {
 
   // Time formatters
   const displaySeconds = mode === 'manual' ? secondsElapsed : secondsRemaining;
-  const minutes = Math.floor(displaySeconds / 60);
+  const hours = Math.floor(displaySeconds / 3600);
+  const minutes = Math.floor((displaySeconds % 3600) / 60);
   const seconds = displaySeconds % 60;
-  const timeFormatted = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  const timeFormatted =
+    hours > 0
+      ? `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+      : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
   const currentCourse = courses.find((c) => c.id === selectedCourseId);
 
   // Progress percentage
-  const totalTarget = POMODORO_DURATIONS[mode] || 1;
+  const totalTarget =
+    mode === 'timer'
+      ? customMinutes * 60
+      : POMODORO_DURATIONS[mode] || 1;
   const progressPercent =
     mode === 'manual'
       ? Math.min(100, Math.round((secondsElapsed / 3600) * 100))
@@ -268,10 +314,10 @@ export function TimerPage() {
 
         {/* Mode Selector Tabs */}
         <div className="flex justify-center">
-          <div className="inline-flex p-1.5 rounded-2xl bg-slate-950/80 border border-slate-800">
+          <div className="inline-flex flex-wrap justify-center p-1.5 rounded-2xl bg-slate-950/80 border border-slate-800 gap-1">
             <button
               onClick={() => handleModeChange('pomodoro')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
                 mode === 'pomodoro'
                   ? 'bg-brand-600 text-white shadow-md shadow-brand-500/20'
                   : 'text-slate-400 hover:text-white'
@@ -281,8 +327,19 @@ export function TimerPage() {
               <span>Pomodoro (25m)</span>
             </button>
             <button
+              onClick={() => handleModeChange('timer')}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                mode === 'timer'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <TimerIcon className="w-3.5 h-3.5 text-blue-300" />
+              <span>Normal Timer</span>
+            </button>
+            <button
               onClick={() => handleModeChange('shortBreak')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
                 mode === 'shortBreak'
                   ? 'bg-emerald-600 text-white shadow-md'
                   : 'text-slate-400 hover:text-white'
@@ -293,7 +350,7 @@ export function TimerPage() {
             </button>
             <button
               onClick={() => handleModeChange('longBreak')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
                 mode === 'longBreak'
                   ? 'bg-teal-600 text-white shadow-md'
                   : 'text-slate-400 hover:text-white'
@@ -304,7 +361,7 @@ export function TimerPage() {
             </button>
             <button
               onClick={() => handleModeChange('manual')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
                 mode === 'manual'
                   ? 'bg-indigo-600 text-white shadow-md'
                   : 'text-slate-400 hover:text-white'
@@ -315,6 +372,45 @@ export function TimerPage() {
             </button>
           </div>
         </div>
+
+        {/* Normal Timer Duration Presets & Custom Input */}
+        {mode === 'timer' && (
+          <div className="flex flex-wrap items-center justify-center gap-2 p-3 rounded-2xl bg-slate-950/60 border border-slate-800/80 animate-fade-in max-w-lg mx-auto">
+            <span className="text-xs text-slate-400 font-semibold mr-1">Duration:</span>
+            {[10, 15, 20, 30, 45, 60].map((mins) => (
+              <button
+                key={mins}
+                type="button"
+                disabled={isRunning}
+                onClick={() => handleCustomMinutesChange(mins)}
+                className={`px-3 py-1 rounded-xl text-xs font-semibold transition-all ${
+                  customMinutes === mins
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white disabled:opacity-50'
+                }`}
+              >
+                {mins}m
+              </button>
+            ))}
+            <div className="flex items-center gap-1.5 ml-1">
+              <input
+                type="number"
+                min="1"
+                max="240"
+                disabled={isRunning}
+                value={customMinutes}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  if (!isNaN(val) && val > 0 && val <= 240) {
+                    handleCustomMinutesChange(val);
+                  }
+                }}
+                className="w-14 px-2 py-1 rounded-xl bg-slate-900 border border-slate-700 text-xs text-center text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 font-semibold"
+              />
+              <span className="text-xs text-slate-400 font-medium">min</span>
+            </div>
+          </div>
+        )}
 
         {/* Timer Display Face */}
         <div className="text-center space-y-4">
@@ -366,7 +462,7 @@ export function TimerPage() {
 
           {secondsElapsed > 0 && (
             <button
-              onClick={() => logCurrentSession(mode === 'pomodoro' && secondsRemaining === 0)}
+              onClick={() => logCurrentSession((mode === 'pomodoro' || mode === 'timer') && secondsRemaining === 0)}
               className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-lg shadow-emerald-500/20 transition-all"
             >
               <Check className="w-5 h-5" />
@@ -472,7 +568,7 @@ export function TimerPage() {
                           hour: '2-digit',
                           minute: '2-digit',
                         })}{' '}
-                        • <span className="capitalize">{session.mode}</span>
+                        • <span className="capitalize">{session.mode === 'timer' ? 'Normal Timer' : session.mode === 'manual' ? 'Stopwatch' : session.mode}</span>
                       </p>
                     </div>
                   </div>
